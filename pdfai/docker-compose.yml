@@ -1,10 +1,44 @@
 services:
-  pdfai:
-    build: .
-    container_name: pdfai
+  ollama-server:
+    image: ollama/ollama:latest
+    container_name: ollama
     ports:
-      - "3024:8000"  # Maps FastAPI's internal port 8000 to host 3024
+      - "11434:11434"
     volumes:
-      - ./data:/app/data
-      - ./faiss_index:/app/faiss_index
+      - /mnt/sec/apps/ollama/data:/root/.ollama
     restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    runtime: nvidia
+
+  ollama-webui:
+    image: ghcr.io/ollama-webui/ollama-webui:main
+    container_name: ollama-webui
+    restart: unless-stopped
+    environment:
+      - 'OLLAMA_BASE_URL=http://ollama-server:11434'
+    volumes:
+      - /mnt/sec/apps/ollama/webui:/app/backend/data
+    ports:
+      - "3014:8080"
+    extra_hosts:
+      - host.docker.internal:host-gateway
+
+  pdfai:
+    image: ghcr.io/therepos/pdfai:latest  # Use the prebuilt GHCR image
+    container_name: pdfai
+    restart: unless-stopped
+    depends_on:
+      - ollama-server  # Ensure Ollama starts first
+    environment:
+      - OLLAMA_HOST=http://ollama-server:11434  # Ensure PDF-AI can talk to Ollama
+    volumes:
+      - /mnt/sec/apps/pdfai/data:/app/data
+      - /mnt/sec/apps/pdfai/faiss_index:/app/faiss_index
+    ports:
+      - "3024:8000"  # Expose the PDF-AI API
