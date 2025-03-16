@@ -8,7 +8,7 @@ import string
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import FileResponse
 from extract import extract_text
-from store import store_text_in_faiss
+from store import store_in_faiss
 from process import chunk_text
 from query import query_ai
 
@@ -67,7 +67,7 @@ async def upload_file(file: UploadFile = File(...)):
 
             # Chunk and store in FAISS
             chunks = chunk_text(extracted_text)
-            store_text_in_faiss(chunks)
+            store_in_faiss(chunks)
 
             os.remove(file_path)  # Delete original file
 
