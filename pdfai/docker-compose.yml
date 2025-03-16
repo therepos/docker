@@ -1,7 +1,7 @@
 services:
   pdf-ai:
     build: .
-    container_name: pdf-ai
+    container_name: pdfai
     ports:
       - "3024:8000"  # Maps FastAPI's internal port 8000 to host 3024
     volumes:
