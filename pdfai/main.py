@@ -19,7 +19,7 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @app.get("/")
 def read_root():
-    return {"message": "PDF-AI API is running"}
+    return {"message": "PDFAI API is running"}
 
 # PDF Text Extraction
 def extract_text_from_pdf(pdf_path):
