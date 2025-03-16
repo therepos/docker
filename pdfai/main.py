@@ -1,102 +1,133 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
-from typing import List
-import shutil
+import random
+import string
+import json
+from fastapi import FastAPI, UploadFile, File, HTTPException, Query
+from fastapi.responses import FileResponse
 import os
-import pytesseract
-from PIL import Image
-import fitz  # PyMuPDF
+import shutil
 import logging
-from extract import process_pdf  # Import process_pdf for PDF processing
+import datetime
+from process import chunk_text
+from store import store_in_faiss
+from query import query_ai
 
 app = FastAPI()
 
-# Set up logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
 UPLOAD_DIR = "data"
+METADATA_FILE = os.path.join(UPLOAD_DIR, "files_metadata.json")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+# Load existing metadata or create a new one
+if not os.path.exists(METADATA_FILE):
+    with open(METADATA_FILE, "w") as f:
+        json.dump({}, f)
+
+def save_metadata(metadata):
+    with open(METADATA_FILE, "w") as f:
+        json.dump(metadata, f, indent=4)
+
+def load_metadata():
+    with open(METADATA_FILE, "r") as f:
+        return json.load(f)
+
+def generate_uid():
+    """Generate a 12-character alphanumeric UID."""
+    return ''.join(random.choices(string.ascii_letters + string.digits, k=12))
+
 @app.get("/")
-def read_root():
-    return {"message": "PDFAI API is running"}
+def about():
+    """Returns basic information about the API."""
+    return {"message": "PDF-AI API is running", "version": "1.0", "features": ["Upload PDF", "Query AI", "Download Extracted Text", "Delete Files"]}
 
-# PDF Text Extraction
-def extract_text_from_pdf(pdf_path):
-    doc = fitz.open(pdf_path)
-    text = ""
-    for page in doc:
-        text += page.get_text("text") + "\n"
-    return text if text.strip() else None
-
-# OCR for Image Files (JPEG/PNG)
-def extract_text_from_image(image_path):
-    img = Image.open(image_path)
-    return pytesseract.image_to_string(img)
-
-# API to Upload Multiple PDFs
-@app.post("/upload_pdfs/")
-async def upload_pdfs(files: List[UploadFile] = File(...)):
-    """Uploads multiple PDF files and extracts text."""
-    responses = []
-    for file in files:
-        file_path = os.path.join(UPLOAD_DIR, file.filename)
-        text_path = file_path.replace(".pdf", ".txt")  # Set path for extracted text
-
-        logger.info(f"Received PDF upload: {file.filename}")
-        try:
-            # Save the uploaded file
-            with open(file_path, "wb") as buffer:
-                shutil.copyfileobj(file.file, buffer)
-
-            # Extract text from the PDF
-            extracted_text = process_pdf(file_path, text_path)  # Use existing process_pdf for PDFs
-
-            if extracted_text:
-                with open(text_path, "w", encoding="utf-8") as text_file:
-                    text_file.write(extracted_text)
-                logger.info(f"Text extracted and saved to {text_path}")
-                os.remove(file_path)  # Optionally remove the original file after processing
-                responses.append({"file": file.filename, "message": f"Text extracted to {text_path}"})
-            else:
-                logger.error(f"No text extracted from {file.filename}")
-                responses.append({"file": file.filename, "message": "No text extracted."})
-        except Exception as e:
-            logger.error(f"Error processing PDF {file.filename}: {e}")
-            responses.append({"file": file.filename, "message": "Internal Server Error"})
+@app.post("/upload/")
+async def upload_file(file: UploadFile = File(...)):
+    """Uploads a PDF, extracts text, stores in FAISS, and assigns a short UID."""
+    metadata = load_metadata()
     
-    return responses
+    uid = generate_uid()  # Generate a 12-character UID
+    text_filename = f"{uid}.txt"
+    file_path = os.path.join(UPLOAD_DIR, text_filename)
 
-# API to Upload Multiple Images (JPEG/PNG)
-@app.post("/upload_images/")
-async def upload_images(files: List[UploadFile] = File(...)):
-    """Uploads multiple image files (JPEG/PNG) and extracts text."""
-    responses = []
-    for file in files:
-        file_path = os.path.join(UPLOAD_DIR, file.filename)
-        text_path = file_path.replace(file.filename.split('.')[-1], "txt")  # Set path for extracted text
+    logger = logging.getLogger(__name__)
+    logger.info(f"Received file upload: {file.filename}")
 
-        logger.info(f"Received image upload: {file.filename}")
-        try:
-            # Save the uploaded image
-            with open(file_path, "wb") as buffer:
-                shutil.copyfileobj(file.file, buffer)
+    try:
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
 
-            # Extract text from the image
-            extracted_text = extract_text_from_image(file_path)  # OCR for images
-            logger.info(f"Text extracted from image: {file.filename}")
+        import fitz  # PyMuPDF
+        doc = fitz.open(file_path)
+        extracted_text = "\n".join([page.get_text("text") for page in doc])
 
-            if extracted_text:
-                with open(text_path, "w", encoding="utf-8") as text_file:
-                    text_file.write(extracted_text)
-                logger.info(f"Text extracted and saved to {text_path}")
-                os.remove(file_path)  # Optionally remove the original file after processing
-                responses.append({"file": file.filename, "message": f"Text extracted to {text_path}"})
-            else:
-                logger.error(f"No text extracted from {file.filename}")
-                responses.append({"file": file.filename, "message": "No text extracted."})
-        except Exception as e:
-            logger.error(f"Error processing image {file.filename}: {e}")
-            responses.append({"file": file.filename, "message": "Internal Server Error"})
+        if extracted_text.strip():
+            with open(file_path, "w", encoding="utf-8") as text_file:
+                text_file.write(extracted_text)
+
+            # Chunk and store in FAISS
+            chunks = chunk_text(extracted_text)
+            store_in_faiss(chunks)
+
+            os.remove(file.filename)  # Delete original PDF
+
+            # Save metadata
+            metadata[uid] = {
+                "uid": uid,
+                "original_filename": file.filename,
+                "stored_filename": text_filename,
+                "size_kb": round(len(extracted_text) / 1024, 2),
+                "last_modified": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            }
+            save_metadata(metadata)
+
+            return {"uid": uid, "file": file.filename, "message": "Text extracted and stored in FAISS."}
+        else:
+            return {"file": file.filename, "message": "No text extracted."}
+
+    except Exception as e:
+        logger.error(f"Error processing file {file.filename}: {e}")
+        return {"file": file.filename, "message": "Internal Server Error"}
+
+@app.get("/files/")
+def list_extracted_files():
+    """Lists available extracted text files with UID, filename, size, and modified date."""
+    metadata = load_metadata()
+    if not metadata:
+        return {"message": "No extracted text files found."}
+    return {"extracted_files": list(metadata.values())}
+
+@app.get("/download/")
+async def download_extracted_text(uid: str):
+    """Allows users to download extracted text using UID."""
+    metadata = load_metadata()
     
-    return responses
+    if uid not in metadata:
+        raise HTTPException(status_code=404, detail="File not found.")
+
+    text_path = os.path.join(UPLOAD_DIR, metadata[uid]["stored_filename"])
+
+    if not os.path.exists(text_path):
+        raise HTTPException(status_code=404, detail="Extracted text file not found.")
+
+    return FileResponse(text_path, media_type="text/plain", filename=metadata[uid]["original_filename"] + ".txt")
+
+@app.delete("/delete/")
+def delete_extracted_text(uid: str):
+    """Deletes an extracted text file and removes its metadata."""
+    metadata = load_metadata()
+
+    if uid not in metadata:
+        raise HTTPException(status_code=404, detail="File not found.")
+
+    text_path = os.path.join(UPLOAD_DIR, metadata[uid]["stored_filename"])
+
+    try:
+        if os.path.exists(text_path):
+            os.remove(text_path)
+
+        del metadata[uid]
+        save_metadata(metadata)
+
+        return {"uid": uid, "message": "File deleted successfully."}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error deleting file: {str(e)}")
