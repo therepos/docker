@@ -16,19 +16,6 @@ services:
               capabilities: [gpu]
     runtime: nvidia
 
-  ollama-webui:
-    image: ghcr.io/ollama-webui/ollama-webui:main
-    container_name: ollama-webui
-    restart: unless-stopped
-    environment:
-      - 'OLLAMA_BASE_URL=http://ollama-server:11434'
-    volumes:
-      - /mnt/sec/apps/ollama/webui:/app/backend/data
-    ports:
-      - "3014:8080"
-    extra_hosts:
-      - host.docker.internal:host-gateway
-
   pdfai:
     image: ghcr.io/therepos/pdfai:latest  # Use the prebuilt GHCR image
     container_name: pdfai

@@ -1,12 +1,11 @@
-import random
-import string
-import json
-from fastapi import FastAPI, UploadFile, File, HTTPException, Query
-from fastapi.responses import FileResponse
 import os
-import shutil
 import logging
 import datetime
+import json
+import shutil
+import fitz  # PyMuPDF
+from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi.responses import FileResponse
 from process import chunk_text
 from store import store_in_faiss
 from query import query_ai
@@ -30,10 +29,6 @@ def load_metadata():
     with open(METADATA_FILE, "r") as f:
         return json.load(f)
 
-def generate_uid():
-    """Generate a 12-character alphanumeric UID."""
-    return ''.join(random.choices(string.ascii_letters + string.digits, k=12))
-
 @app.get("/")
 def about():
     """Returns basic information about the API."""
@@ -44,7 +39,7 @@ async def upload_file(file: UploadFile = File(...)):
     """Uploads a PDF, extracts text, stores in FAISS, and assigns a short UID."""
     metadata = load_metadata()
     
-    uid = generate_uid()  # Generate a 12-character UID
+    uid = ''.join(random.choices(string.ascii_letters + string.digits, k=12))  # Generate a 12-character UID
     text_filename = f"{uid}.txt"
     file_path = os.path.join(UPLOAD_DIR, text_filename)
 
@@ -55,7 +50,6 @@ async def upload_file(file: UploadFile = File(...)):
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        import fitz  # PyMuPDF
         doc = fitz.open(file_path)
         extracted_text = "\n".join([page.get_text("text") for page in doc])
 
@@ -63,9 +57,8 @@ async def upload_file(file: UploadFile = File(...)):
             with open(file_path, "w", encoding="utf-8") as text_file:
                 text_file.write(extracted_text)
 
-            # Chunk and store in FAISS
-            chunks = chunk_text(extracted_text)
-            store_in_faiss(chunks)
+            # Use store.py to handle FAISS storage
+            store_text_in_faiss(extracted_text)
 
             os.remove(file.filename)  # Delete original PDF
 
@@ -131,3 +124,12 @@ def delete_extracted_text(uid: str):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error deleting file: {str(e)}")
+
+@app.get("/query/")
+def query_extracted_text(question: str):
+    """Queries the extracted text using AI (Ollama or OpenAI)."""
+    try:
+        response = query_ai(question)
+        return {"question": question, "answer": response}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing query: {str(e)}")
