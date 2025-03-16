@@ -3,11 +3,13 @@ import logging
 import datetime
 import json
 import shutil
-import fitz  # PyMuPDF
+import random
+import string
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import FileResponse
+from extract import process_pdf
+from store import store_text_in_faiss
 from process import chunk_text
-from store import store_in_faiss
 from query import query_ai
 
 app = FastAPI()
@@ -41,26 +43,29 @@ async def upload_file(file: UploadFile = File(...)):
     
     uid = ''.join(random.choices(string.ascii_letters + string.digits, k=12))  # Generate a 12-character UID
     text_filename = f"{uid}.txt"
-    file_path = os.path.join(UPLOAD_DIR, text_filename)
+    text_path = os.path.join(UPLOAD_DIR, text_filename)
 
     logger = logging.getLogger(__name__)
     logger.info(f"Received file upload: {file.filename}")
 
     try:
-        with open(file_path, "wb") as buffer:
+        pdf_path = os.path.join(UPLOAD_DIR, file.filename)
+        with open(pdf_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        doc = fitz.open(file_path)
-        extracted_text = "\n".join([page.get_text("text") for page in doc])
+        # Extract text using extract.py
+        process_pdf(pdf_path, text_path)
+
+        # Read extracted text
+        with open(text_path, "r", encoding="utf-8") as text_file:
+            extracted_text = text_file.read()
 
         if extracted_text.strip():
-            with open(file_path, "w", encoding="utf-8") as text_file:
-                text_file.write(extracted_text)
+            # Chunk and store in FAISS using store.py
+            chunks = chunk_text(extracted_text)
+            store_text_in_faiss(chunks)
 
-            # Use store.py to handle FAISS storage
-            store_text_in_faiss(extracted_text)
-
-            os.remove(file.filename)  # Delete original PDF
+            os.remove(pdf_path)  # Delete original PDF
 
             # Save metadata
             metadata[uid] = {
