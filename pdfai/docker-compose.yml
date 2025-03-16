@@ -1,5 +1,5 @@
 services:
-  pdf-ai:
+  pdfai:
     build: .
     container_name: pdfai
     ports:
