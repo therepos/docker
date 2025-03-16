@@ -7,7 +7,7 @@ import random
 import string
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import FileResponse
-from extract import process_pdf
+from extract import extract_text
 from store import store_text_in_faiss
 from process import chunk_text
 from query import query_ai
@@ -18,11 +18,6 @@ UPLOAD_DIR = "data"
 METADATA_FILE = os.path.join(UPLOAD_DIR, "files_metadata.json")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-# Load existing metadata or create a new one
-if not os.path.exists(METADATA_FILE):
-    with open(METADATA_FILE, "w") as f:
-        json.dump({}, f)
-
 def save_metadata(metadata):
     with open(METADATA_FILE, "w") as f:
         json.dump(metadata, f, indent=4)
@@ -31,17 +26,27 @@ def load_metadata():
     with open(METADATA_FILE, "r") as f:
         return json.load(f)
 
+def generate_uid():
+    """Generate a unique 12-character alphanumeric UID."""
+    metadata = load_metadata()
+    existing_uids = set(metadata.keys())  # Get all existing UIDs
+
+    while True:
+        uid = ''.join(random.choices(string.ascii_letters + string.digits, k=12))
+        if uid not in existing_uids:  # Ensure uniqueness
+            return uid
+
 @app.get("/")
 def about():
     """Returns basic information about the API."""
-    return {"message": "PDF-AI API is running", "version": "1.0", "features": ["Upload PDF", "Query AI", "Download Extracted Text", "Delete Files"]}
+    return {"message": "PDF-AI API is running", "version": "1.0", "features": ["Upload PDF/Image", "Query AI", "Download Extracted Text", "Delete Files"]}
 
 @app.post("/upload/")
 async def upload_file(file: UploadFile = File(...)):
-    """Uploads a PDF, extracts text, stores in FAISS, and assigns a short UID."""
+    """Uploads a PDF or image, extracts text, stores in FAISS, and assigns a unique UID."""
     metadata = load_metadata()
     
-    uid = ''.join(random.choices(string.ascii_letters + string.digits, k=12))  # Generate a 12-character UID
+    uid = generate_uid()
     text_filename = f"{uid}.txt"
     text_path = os.path.join(UPLOAD_DIR, text_filename)
 
@@ -49,31 +54,30 @@ async def upload_file(file: UploadFile = File(...)):
     logger.info(f"Received file upload: {file.filename}")
 
     try:
-        pdf_path = os.path.join(UPLOAD_DIR, file.filename)
-        with open(pdf_path, "wb") as buffer:
+        file_path = os.path.join(UPLOAD_DIR, file.filename)
+        with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
         # Extract text using extract.py
-        process_pdf(pdf_path, text_path)
-
-        # Read extracted text
-        with open(text_path, "r", encoding="utf-8") as text_file:
-            extracted_text = text_file.read()
+        extracted_text = extract_text(file_path)
 
         if extracted_text.strip():
-            # Chunk and store in FAISS using store.py
+            with open(text_path, "w", encoding="utf-8") as text_file:
+                text_file.write(extracted_text)
+
+            # Chunk and store in FAISS
             chunks = chunk_text(extracted_text)
             store_text_in_faiss(chunks)
 
-            os.remove(pdf_path)  # Delete original PDF
+            os.remove(file_path)  # Delete original file
 
-            # Save metadata
             metadata[uid] = {
                 "uid": uid,
                 "original_filename": file.filename,
                 "stored_filename": text_filename,
                 "size_kb": round(len(extracted_text) / 1024, 2),
-                "last_modified": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                "last_modified": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "file_type": "PDF" if file.filename.lower().endswith(".pdf") else "Image"
             }
             save_metadata(metadata)
 
