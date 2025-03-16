@@ -23,6 +23,8 @@ def save_metadata(metadata):
         json.dump(metadata, f, indent=4)
 
 def load_metadata():
+    if not os.path.exists(METADATA_FILE):
+        return {}  # Return an empty dictionary if the file doesn't exist
     with open(METADATA_FILE, "r") as f:
         return json.load(f)
 
