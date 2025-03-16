@@ -25,6 +25,7 @@ services:
     environment:
       - OLLAMA_HOST=http://ollama-server:11434  # Ensure PDF-AI can talk to Ollama
       - OPENAI_API_KEY=your_openai_api_key_here  # Directly set the OpenAI API key here
+      - OLLAMA_MODEL=llama3.2  # Set the model directly here
     volumes:
       - /mnt/sec/apps/pdfai/data:/app/data
       - /mnt/sec/apps/pdfai/faiss_index:/app/faiss_index
