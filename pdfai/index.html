@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Files</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        h1 { text-align: center; }
+        .container { max-width: 600px; margin: auto; }
+        input[type="file"] { margin: 10px 0; }
+        button { display: block; margin: 10px auto; padding: 10px 20px; cursor: pointer; }
+        .result { margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Upload PDF/Images</h1>
+
+        <form id="upload-form">
+            <input type="file" id="file-upload" name="files" multiple />
+            <button type="submit">Upload Files</button>
+        </form>
+
+        <div class="result" id="result"></div>
+    </div>
+
+    <script>
+        // Handle form submission
+        document.getElementById('upload-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const formData = new FormData();
+            const files = document.getElementById('file-upload').files;
+
+            // Add each selected file to formData
+            for (const file of files) {
+                formData.append('files', file);
+            }
+
+            try {
+                const response = await fetch('http://localhost:3024/upload_pdfs/', {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                const result = await response.json();
+                document.getElementById('result').innerHTML = `
+                    <h2>Upload Results</h2>
+                    <pre>${JSON.stringify(result, null, 2)}</pre>
+                `;
+            } catch (error) {
+                document.getElementById('result').innerHTML = `
+                    <h2>Error</h2>
+                    <p>There was an error uploading the files. Please try again.</p>
+                `;
+            }
+        });
+    </script>
+</body>
+</html>
