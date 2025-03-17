@@ -19,8 +19,29 @@ METADATA_FILE = os.path.join(UPLOAD_DIR, "files_metadata.json")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 def save_metadata(metadata):
-    with open(METADATA_FILE, "w") as f:
-        json.dump(metadata, f, indent=4)
+    """Ensures metadata file exists and writes data to it."""
+    try:
+        os.makedirs(UPLOAD_DIR, exist_ok=True)  # Ensure directory exists
+
+        # Load existing metadata (if any)
+        if os.path.exists(METADATA_FILE):
+            with open(METADATA_FILE, "r") as f:
+                try:
+                    existing_metadata = json.load(f)
+                except json.JSONDecodeError:
+                    existing_metadata = {}
+        else:
+            existing_metadata = {}
+
+        # Merge new metadata with existing metadata
+        existing_metadata.update(metadata)
+
+        # Write updated metadata
+        with open(METADATA_FILE, "w") as f:
+            json.dump(existing_metadata, f, indent=4)
+
+    except Exception as e:
+        logging.error(f"Error saving metadata: {e}")
 
 def load_metadata():
     if not os.path.exists(METADATA_FILE):
