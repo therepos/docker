@@ -1,5 +1,5 @@
 services:
-  ollama-server:
+  ollama:
     image: ollama/ollama:latest
     container_name: ollama
     ports:
@@ -17,16 +17,16 @@ services:
     runtime: nvidia
 
   pdfai:
-    image: ghcr.io/therepos/pdfai:latest  # Use the prebuilt GHCR image
+    image: ghcr.io/therepos/pdfai:latest
     container_name: pdfai
     restart: unless-stopped
     depends_on:
-      - ollama-server  # Ensure Ollama starts first
+      - ollama  # Ensure Ollama starts first
     environment:
-      - OLLAMA_HOST=http://ollama-server:11434  # Ensure PDF-AI can talk to Ollama
-      - OPENAI_API_KEY=your_openai_api_key_here  # Directly set the OpenAI API key here
-      - OLLAMA_MODEL=llama3.2  # Set the model directly here
+      - OLLAMA_HOST=http://ollama:11434  # Ensure PDF-AI can talk to Ollama
+      - OLLAMA_MODEL=llama3.2  # Set the model dynamically
     volumes:
+      - /mnt/sec/apps/pdfai:/app
       - /mnt/sec/apps/pdfai/data:/app/data
       - /mnt/sec/apps/pdfai/faiss_index:/app/faiss_index
     ports:

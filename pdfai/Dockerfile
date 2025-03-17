@@ -9,6 +9,8 @@ RUN apt-get update && apt-get install -y \
     libtesseract-dev \
     poppler-utils \
     curl \
+    nano \
+    net-tools \
     && rm -rf /var/lib/apt/lists/*
 
 # Install pip

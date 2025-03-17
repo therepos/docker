@@ -1,10 +1,12 @@
-import os
+from langchain_ollama import OllamaEmbeddings
 from langchain_community.vectorstores import FAISS
-from langchain_community.embeddings import OllamaEmbeddings
+import os
+
+# Fetch model from environment variable
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2")  # Default to llama3.2
 
 def store_in_faiss(chunks):
     """Stores extracted text chunks in FAISS vector database using Ollama embeddings."""
-    model = os.getenv("OLLAMA_MODEL", "llama3.2")  # Get from env, fallback to "llama3.2"
-    embeddings = OllamaEmbeddings(model=model)
+    embeddings = OllamaEmbeddings(model=OLLAMA_MODEL)  # Ensure consistency with querying
     vector_store = FAISS.from_texts(chunks, embeddings)
-    vector_store.save_local("faiss_index")
+    vector_store.save_local("/app/faiss_index")  # Ensure path consistency
