@@ -22,7 +22,7 @@ services:
     container_name: pdfai
     restart: unless-stopped
     depends_on:
-      - ollama  # Ensure Ollama starts first
+      - ollama
     environment:
       - OLLAMA_HOST=http://ollama:11434  # Ensure PDF-AI can talk to Ollama
       - OLLAMA_MODEL=mistral  # Set the model dynamically
