@@ -13,7 +13,7 @@ pypdf
 pdf2image
 pillow
 Ebooklib
-python-mobi
+mobi
 
 # OCR tools (DO NOT add `tesseract-ocr` here, it must be installed via apt)
 pytesseract

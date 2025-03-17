@@ -1,10 +1,10 @@
 import fitz  # PyMuPDF
 import pytesseract
+import mobi
+import os
 from pdf2image import convert_from_path
 from PIL import Image
 from ebooklib import epub
-from mobi import extract
-import os
 
 def extract_text_from_epub(epub_path):
     """Extract text from an EPUB file."""
