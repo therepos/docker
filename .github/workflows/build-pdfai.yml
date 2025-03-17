@@ -3,7 +3,7 @@ name: Build and Push PDF-AI Image
 on:
   push:
     paths:
-      - 'pdfai/**'
+      - 'pdfai/**'          # Specify path to changes that trigger commit
   workflow_dispatch:
 
 jobs:
@@ -13,13 +13,11 @@ jobs:
       packages: write
 
     steps:
-      - name: Wait for GitHub commit propagation (4 min)
-        run: sleep 240  # Wait exactly 4 minutes (240 seconds)
-
       - name: Checkout Repository
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0  # Ensures the latest commit is used
+          ref: main
+          fetch-depth: 0    # Ensures the latest commit is used
 
       - name: Log in to GHCR
         run: echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin

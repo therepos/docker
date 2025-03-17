@@ -1,13 +1,12 @@
 import os
-import requests
 from langchain_community.vectorstores import FAISS
 from langchain.chains import RetrievalQA
-from langchain_community.llms import Ollama
+from langchain_ollama import OllamaLLM  # Updated import
 from langchain_ollama import OllamaEmbeddings
 
 # Fetch Ollama host and model from environment variables
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://ollama:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2")  # Default to llama3.2
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "mistral")  # Default to mistral
 
 def load_vector_store():
     """Loads stored text chunks from FAISS using the correct embeddings."""
@@ -20,7 +19,13 @@ def query_ai(query):
     if not OLLAMA_MODEL:
         return "No available models found in Ollama."
 
-    llm = Ollama(model=OLLAMA_MODEL)
+    # Use the updated OllamaLLM
+    llm = OllamaLLM(model=OLLAMA_MODEL)
     qa_chain = RetrievalQA.from_chain_type(llm, retriever=retriever)
-    
-    return qa_chain.run(query)
+
+    try:
+        # Use invoke instead of run (LangChain recommends this)
+        response = qa_chain.invoke({"query": query})
+        return response
+    except Exception as e:
+        return f"Error processing query: {str(e)}"
