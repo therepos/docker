@@ -5,7 +5,7 @@ uvicorn[gunicorn]
 # LangChain and utilities
 langchain
 langchain-community
-openai
+langchain-ollama
 
 # PDF and image handling
 pymupdf
