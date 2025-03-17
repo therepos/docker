@@ -1,0 +1,28 @@
+name: Build and Push PDF-AI Image
+
+on:
+  push:
+    paths:
+      - 'pdfai-b/**'          # Specify path to changes that trigger commit
+  workflow_dispatch:
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+        with:
+          ref: main
+          fetch-depth: 0    # Ensures the latest commit is used
+
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Build and Push PDF-AI
+        run: |
+          docker build -t ghcr.io/therepos/pdfai-b:latest ./pdfai-b
+          docker push ghcr.io/therepos/pdfai-b:latest
