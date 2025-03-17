@@ -15,6 +15,9 @@ RUN apt-get update && apt-get install -y \
 # Install pip
 RUN curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py && python3 get-pip.py && rm get-pip.py
 
+# Pull the Ollama model (mistral) during the build
+RUN ollama pull mistral
+
 # Copy the requirements file
 COPY requirements.txt /app/
 
@@ -23,6 +26,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application files
 COPY . /app/
+
+# Expose the API port
+EXPOSE 8000
 
 # Set the command to run the app using Uvicorn
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
