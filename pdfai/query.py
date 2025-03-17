@@ -6,7 +6,7 @@ from langchain_community.llms import Ollama
 from langchain_ollama import OllamaEmbeddings
 
 # Fetch Ollama host and model from environment variables
-OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://ollama:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2")  # Default to llama3.2
 
 def load_vector_store():
