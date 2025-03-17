@@ -13,6 +13,9 @@ jobs:
       packages: write
 
     steps:
+      - name: Wait for GitHub commit propagation (4 min)
+        run: sleep 240  # Wait exactly 4 minutes (240 seconds)
+
       - name: Checkout Repository
         uses: actions/checkout@v3
         with:
