@@ -48,6 +48,7 @@ def generate_uid():
 
     while True:
         uid = ''.join(random.choices(string.ascii_letters + string.digits, k=12))
+        print(f"DEBUG: Generated UID: {uid}")  # ✅ Log UID generation
         if uid not in existing_uids:
             return uid
 
@@ -81,11 +82,9 @@ async def upload_file(file: UploadFile = File(...)):
                 text_file.write(extracted_text)
 
             chunks = chunk_text(extracted_text)
-            # Debug
-            print(f"DEBUG: Chunks created: {len(chunks)}")
+            print(f"DEBUG: Calling store_in_faiss with UID {uid}")
             store_in_faiss(chunks, os.getenv("OLLAMA_MODEL", "mistral"), uid)
-            # Debug
-            print(f"DEBUG: Chunks created: {len(chunks)}")
+            print(f"DEBUG: Completed store_in_faiss for UID {uid}")
 
             os.remove(file_path)
 
