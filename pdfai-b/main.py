@@ -65,7 +65,6 @@ async def upload_file(file: UploadFile = File(...)):
     text_filename = f"{uid}.txt"
     text_path = os.path.join(UPLOAD_DIR, text_filename)
 
-    # Debug
     print(f"DEBUG: Upload started for {file.filename}, UID: {uid}")
     print(f"DEBUG: Using Ollama model: {os.getenv('OLLAMA_MODEL')} at {os.getenv('OLLAMA_SERVICE')}")
 
@@ -75,16 +74,17 @@ async def upload_file(file: UploadFile = File(...)):
             shutil.copyfileobj(file.file, buffer)
 
         extracted_text = extract_text(file_path)
-        # Debug
         print(f"DEBUG: Extracted text length: {len(extracted_text)} characters")
+
         if extracted_text.strip():
             with open(text_path, "w", encoding="utf-8") as text_file:
                 text_file.write(extracted_text)
 
             chunks = chunk_text(extracted_text)
-            print(f"DEBUG: Calling store_in_faiss with UID {uid}")
+            print(f"DEBUG: Chunks created: {len(chunks)}")
+
             store_in_faiss(chunks, os.getenv("OLLAMA_MODEL", "mistral"), uid)
-            print(f"DEBUG: Completed store_in_faiss for UID {uid}")
+            print(f"DEBUG: Stored in FAISS with UID: {uid}")
 
             os.remove(file_path)
 
@@ -103,8 +103,7 @@ async def upload_file(file: UploadFile = File(...)):
             return {"file": file.filename, "message": "No text extracted."}
 
     except Exception as e:
-        # Debug
-        print(f"DEBUG: Chunks created: {len(chunks)}")
+        print(f"DEBUG: Upload failed - {str(e)}")
         return {"file": file.filename, "message": f"Error processing file: {str(e)}"}
 
 @app.post("/upload/bulk/")
