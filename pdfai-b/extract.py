@@ -17,8 +17,7 @@ def extract_text_from_epub(epub_path):
 
 def extract_text_from_mobi(mobi_path):
     """Extract text from a MOBI file."""
-    extracted_text = mobi.extract(mobi_path)
-    return extracted_text
+    return mobi.extract_text(mobi_path)
 
 def extract_text_from_pdf(pdf_path):
     """Extract text from a digital/text-based PDF."""
