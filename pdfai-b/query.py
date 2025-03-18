@@ -28,8 +28,9 @@ def query_ai(query, uid=None):
         if uid not in metadata:
             return f"Error: No document found with UID {uid}"
 
-        # ✅ Use FAISS filtering to retrieve only relevant docs for the UID
-        retriever = vector_store.as_retriever(search_kwargs={"filter": {"uid": uid}})
+        # Use FAISS filtering to retrieve only relevant docs for the UID
+        retriever = vector_store.as_retriever(search_kwargs={"filter": {"uid": str(uid)}})
+
     else:
         # Retrieve results from all documents
         retriever = vector_store.as_retriever()
