@@ -139,8 +139,47 @@ def query_extracted_text(uid: str = None, question: str = None):
 @app.post("/switch_model/")
 def switch_model(model: str):
     """Switch model for Ollama."""
-    if model not in ['mistral', 'llama3.2', 'gemma3']:
+    if model not in ['mistral', 'gemma3', 'llama3.1', 'llama3.2', 'llama3.3', 'phi4', 'deepseek-r1', 'qwq']:
         raise HTTPException(status_code=400, detail="Invalid model specified")
 
     os.environ["OLLAMA_MODEL"] = model
     return {"message": f"Model switched to {model}"}
+
+@app.post("/reindex_embeddings/")
+def reindex_embeddings():
+    """Recompute and update all embeddings using the currently selected model."""
+    model = os.getenv("OLLAMA_MODEL", "mistral")  # Get the active model
+    embeddings = OllamaEmbeddings(model=model)
+
+    # Load existing FAISS index
+    faiss_index_path = "/app/faiss_index"
+    if not os.path.exists(faiss_index_path):
+        raise HTTPException(status_code=400, detail="FAISS index not found.")
+
+    vector_store = FAISS.load_local(faiss_index_path, embeddings, allow_dangerous_deserialization=True)
+
+    # Load metadata to retrieve all stored UIDs
+    metadata = load_metadata()
+    if not metadata:
+        raise HTTPException(status_code=400, detail="No stored documents found.")
+
+    all_texts = []
+    all_metadata = []
+
+    # Extract stored texts for re-embedding
+    for uid, data in metadata.items():
+        text_path = os.path.join("data", data["stored_filename"])
+        if os.path.exists(text_path):
+            with open(text_path, "r", encoding="utf-8") as file:
+                text = file.read()
+                all_texts.append(text)
+                all_metadata.append({"uid": uid})
+
+    if not all_texts:
+        raise HTTPException(status_code=400, detail="No valid text data found.")
+
+    # Generate new embeddings using the new model
+    new_vector_store = FAISS.from_texts(all_texts, embeddings, metadatas=all_metadata)
+    new_vector_store.save_local(faiss_index_path)
+
+    return {"message": f"Re-indexed all documents using model {model}."}
