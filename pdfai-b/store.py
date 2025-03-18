@@ -23,8 +23,13 @@ def save_metadata(metadata):
 
 def store_in_faiss(chunks, model, uid):
     """Stores extracted text chunks in FAISS and updates metadata."""
-    embeddings = OllamaEmbeddings(model=model)          
-    vector_store = FAISS.from_texts(chunks, embeddings)
+    embeddings = OllamaEmbeddings(model=model)
+
+    # Store UID as metadata inside FAISS
+    metadatas = [{"uid": uid} for _ in chunks]
+    
+    # Ensure metadata is stored with embeddings
+    vector_store = FAISS.from_texts(chunks, embeddings, metadatas=metadatas)
     vector_store.save_local("/app/faiss_index")
 
     # Load metadata before updating

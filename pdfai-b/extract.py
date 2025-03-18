@@ -18,15 +18,17 @@ def extract_text_from_epub(epub_path):
 def extract_text_from_mobi(mobi_path):
     """Convert MOBI to EPUB and extract text."""
     try:
-        # Convert MOBI to EPUB
-        epub_path = mobi.extract(mobi_path)
-        if not epub_path:
-            return "Error: Failed to convert MOBI to EPUB."
-
-        # Extract text from the converted EPUB file
-        return extract_text_from_epub(epub_path)
+        output_dir = os.path.dirname(mobi_path)
+        mobi.extract(mobi_path, output_dir)  # Extract files into output_dir
+        # Find the extracted EPUB file in the output directory
+        for file in os.listdir(output_dir):
+            if file.endswith(".epub"):
+                epub_path = os.path.join(output_dir, file)
+                return extract_text_from_epub(epub_path)
+        return "Error: MOBI conversion failed, no EPUB found."
     except Exception as e:
         return f"Error extracting MOBI text: {str(e)}"
+
 
 def extract_text_from_pdf(pdf_path):
     """Extract text from a digital/text-based PDF."""

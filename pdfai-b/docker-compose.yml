@@ -4,7 +4,7 @@ services:
     container_name: pdfai
     restart: unless-stopped
     environment:
-      - OLLAMA_SERVICE=${OLLAMA_SERVICE:-auto_detect}  # Auto-detect service name
+      - OLLAMA_SERVICE=ollama # Indicate the name of Ollama service
       - OLLAMA_MODEL=mistral  # Default model
     volumes:
       - /mnt/sec/apps/pdfai/data:/app/data
@@ -12,8 +12,8 @@ services:
     ports:
       - "3024:8000"
     networks:
-      - ${OLLAMA_NETWORK:-bridge}  # Auto-detect network or use default
+      - OLLAMA_NETWORK=ollama-network  # Use the same network as Ollama service
 
 networks:
-  bridge:
+  ollama-network:
     external: true  # Default network fallback

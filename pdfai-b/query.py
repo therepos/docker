@@ -2,8 +2,8 @@ import os
 from langchain_community.vectorstores import FAISS
 from langchain.chains import RetrievalQA
 from langchain_ollama import OllamaLLM, OllamaEmbeddings
-from detect_ollama import detect_ollama_service  # Import service detection
-from store import load_metadata  # Import metadata loading
+from detect_ollama import detect_ollama_service  # Auto-detection
+from store import load_metadata  # Import metadata
 
 # Dynamically determine Ollama host
 OLLAMA_SERVICE = os.getenv("OLLAMA_SERVICE", detect_ollama_service())
@@ -19,26 +19,23 @@ def load_vector_store():
 def query_ai(query, uid=None):
     """Retrieves relevant text and generates an AI answer using Ollama.
     
-    - If `uid` is provided, filters results to match that UID.
+    - If `uid` is provided, filters results using FAISS metadata.
     - Otherwise, searches across all uploaded documents.
     """
     vector_store = load_vector_store()
     retriever = vector_store.as_retriever()
-    
-    # Step 1: Fetch all relevant results
+    metadata = load_metadata()
+
+    # Step 1: Fetch all relevant results from FAISS
     docs = retriever.get_relevant_documents(query)
 
-    # Step 2: If UID is provided, filter results manually
+    # Step 2: If UID is provided, filter documents using FAISS metadata
     if uid:
-        metadata = load_metadata()  # Load metadata from stored JSON
         if uid not in metadata:
             return f"Error: No document found with UID {uid}"
 
-        # Extract stored UIDs from metadata
-        uids_in_metadata = set(metadata.keys())
-
-        # Filter retrieved documents by UID
-        filtered_docs = [doc for doc in docs if doc.metadata and doc.metadata.get("uid") in uids_in_metadata]
+        # Filter using FAISS metadata (no need for filename hacks)
+        filtered_docs = [doc for doc in docs if doc.metadata.get("uid") == uid]
 
         if not filtered_docs:
             return f"No relevant results found for UID {uid}."
