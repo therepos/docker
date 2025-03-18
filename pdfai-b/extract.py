@@ -1,7 +1,7 @@
 import fitz  # PyMuPDF
 import pytesseract
-import mobi
 import os
+import mobi
 from pdf2image import convert_from_path
 from PIL import Image
 from ebooklib import epub
@@ -11,13 +11,22 @@ def extract_text_from_epub(epub_path):
     book = epub.read_epub(epub_path)
     text = ""
     for item in book.get_items():
-        if item.get_type() == ebooklib.ITEM_DOCUMENT:
+        if item.get_type() == epub.ITEM_DOCUMENT:
             text += item.get_body().decode("utf-8")
     return text
 
 def extract_text_from_mobi(mobi_path):
-    """Extract text from a MOBI file."""
-    return mobi.extract_text(mobi_path)
+    """Convert MOBI to EPUB and extract text."""
+    try:
+        # Convert MOBI to EPUB
+        epub_path = mobi.extract(mobi_path)
+        if not epub_path:
+            return "Error: Failed to convert MOBI to EPUB."
+
+        # Extract text from the converted EPUB file
+        return extract_text_from_epub(epub_path)
+    except Exception as e:
+        return f"Error extracting MOBI text: {str(e)}"
 
 def extract_text_from_pdf(pdf_path):
     """Extract text from a digital/text-based PDF."""
@@ -41,19 +50,17 @@ def extract_text_from_image(image_path):
     return pytesseract.image_to_string(img)
 
 def extract_text(file_path):
-    """Extract text based on the file type (PDF, scanned PDF, epub, mobi, or Image)."""
+    """Extract text based on the file type (PDF, scanned PDF, EPUB, MOBI, or Image)."""
     if file_path.lower().endswith('.epub'):
         return extract_text_from_epub(file_path)
     elif file_path.lower().endswith('.mobi'):
         return extract_text_from_mobi(file_path)
     elif file_path.lower().endswith('.pdf'):
-        # If it's a PDF, try to extract text using PyMuPDF
         text = extract_text_from_pdf(file_path)
-        if not text:  # If no text extracted, try OCR on scanned PDFs
+        if not text:
             text = extract_text_from_scanned_pdf(file_path)
         return text
     elif file_path.lower().endswith(('.jpg', '.jpeg', '.png')):
-        # If it's an image, use OCR for text extraction
         return extract_text_from_image(file_path)
     else:
         raise ValueError("Unsupported file type")

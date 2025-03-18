@@ -34,8 +34,11 @@ def query_ai(query, uid=None):
         if uid not in metadata:
             return f"Error: No document found with UID {uid}"
 
-        # Filter retrieved documents by matching UID
-        filtered_docs = [doc for doc in docs if metadata.get(doc.metadata.get("uid"))]
+        # Extract stored UIDs from metadata
+        uids_in_metadata = set(metadata.keys())
+
+        # Filter retrieved documents by UID
+        filtered_docs = [doc for doc in docs if doc.metadata and doc.metadata.get("uid") in uids_in_metadata]
 
         if not filtered_docs:
             return f"No relevant results found for UID {uid}."
