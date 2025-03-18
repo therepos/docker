@@ -45,10 +45,8 @@ def extract_text_from_pdf(pdf_path):
     """Extract text from a digital/text-based PDF."""
     try:
         doc = fitz.open(pdf_path)
-        text = ""
-        for page in doc:
-            text += page.get_text("text") + "\n"
-        return text.strip() if text.strip() else None
+        text = "\n".join([page.get_text("text") for page in doc])
+        return text.strip() if text else None
     except Exception as e:
         return f"Error extracting PDF text: {str(e)}"
 
@@ -56,9 +54,7 @@ def extract_text_from_scanned_pdf(pdf_path):
     """Extract text from a scanned/image-based PDF using OCR."""
     try:
         images = convert_from_path(pdf_path)
-        text = ""
-        for img in images:
-            text += pytesseract.image_to_string(img) + "\n"
+        text = "\n".join([pytesseract.image_to_string(img) for img in images])
         return text.strip() if text else "Error: No readable text from OCR."
     except Exception as e:
         return f"Error extracting scanned PDF text: {str(e)}"

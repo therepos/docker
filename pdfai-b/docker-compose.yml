@@ -8,12 +8,13 @@ services:
       - OLLAMA_MODEL=mistral  # Default model
     volumes:
       - /mnt/sec/apps/pdfai/data:/app/data
+      - /mnt/sec/apps/pdfai/export:/app/export
       - /mnt/sec/apps/pdfai/faiss_index:/app/faiss_index
     ports:
       - "3024:8000"
     networks:
-      - ollama-network  # Use the same network as Ollama service
+      - ollama_default  # Use the same network as Ollama service
 
 networks:
-  ollama-network:
+  ollama_default:
     external: true  # Default network fallback
