@@ -11,15 +11,9 @@ from extract import extract_text
 from store import store_in_faiss
 from process import chunk_text
 from query import query_ai
-from detect_ollama import detect_ollama_network, detect_ollama_service  # Auto-detection
 
-# Automatically detect network and service name
-OLLAMA_NETWORK = detect_ollama_network()
-OLLAMA_SERVICE = detect_ollama_service()
-
-# Set detected values as environment variables
-os.environ["OLLAMA_NETWORK"] = OLLAMA_NETWORK
-os.environ["OLLAMA_SERVICE"] = OLLAMA_SERVICE
+# Load Ollama service name from environment variables (set in docker-compose)
+OLLAMA_SERVICE = os.getenv("OLLAMA_SERVICE", "ollama")
 
 app = FastAPI()
 

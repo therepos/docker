@@ -12,7 +12,7 @@ services:
     ports:
       - "3024:8000"
     networks:
-      - OLLAMA_NETWORK=ollama-network  # Use the same network as Ollama service
+      - ollama-network  # Use the same network as Ollama service
 
 networks:
   ollama-network:
