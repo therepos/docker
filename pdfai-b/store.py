@@ -35,8 +35,13 @@ def initialize_faiss(embeddings):
 def store_in_faiss(chunks, model, uid):
     """Stores extracted text chunks in FAISS and updates metadata."""
     print(f"DEBUG: Storing {len(chunks)} chunks in FAISS with model: {model}")
-    embeddings = OllamaEmbeddings(model=model)
-    print(f"DEBUG: Embeddings object created for model {model}")
+    
+    try:
+        embeddings = OllamaEmbeddings(model=model)
+        print(f"DEBUG: Embedding model {model} initialized")
+    except Exception as e:
+        print(f"DEBUG: Embedding model creation failed - {str(e)}")
+        raise
 
     # Ensure FAISS is initialized before storing new embeddings
     initialize_faiss(embeddings)
