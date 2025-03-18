@@ -34,7 +34,9 @@ def initialize_faiss(embeddings):
 
 def store_in_faiss(chunks, model, uid):
     """Stores extracted text chunks in FAISS and updates metadata."""
+    print(f"DEBUG: Storing {len(chunks)} chunks in FAISS with model: {model}")
     embeddings = OllamaEmbeddings(model=model)
+    print(f"DEBUG: Embeddings object created for model {model}")
 
     # Ensure FAISS is initialized before storing new embeddings
     initialize_faiss(embeddings)
@@ -43,9 +45,14 @@ def store_in_faiss(chunks, model, uid):
     metadatas = [{"uid": uid} for _ in chunks]
 
     # Load existing FAISS index if available
-    vector_store = FAISS.load_local(FAISS_INDEX_PATH, embeddings, allow_dangerous_deserialization=True)
-    vector_store.add_texts(chunks, metadatas=metadatas)
-    vector_store.save_local(FAISS_INDEX_PATH)
+    try:
+        vector_store = FAISS.load_local(FAISS_INDEX_PATH, embeddings, allow_dangerous_deserialization=True)
+        vector_store.add_texts(chunks, metadatas=metadatas)
+        vector_store.save_local(FAISS_INDEX_PATH)
+        print(f"DEBUG: Successfully stored embeddings for UID {uid}")
+    except Exception as e:
+        print(f"DEBUG: FAISS storage failed - {str(e)}")
+        raise Exception(f"Error storing embeddings: {str(e)}")
 
     # Update metadata
     metadata = load_metadata()
