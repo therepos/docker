@@ -1,12 +1,14 @@
 import os
 import datetime
 import json
-import requests
 from langchain_ollama import OllamaEmbeddings
 from langchain_community.vectorstores import FAISS
 
 METADATA_FILE = "/app/data/files_metadata.json"  # Ensure consistency with main.py
 FAISS_INDEX_PATH = "/app/faiss_index"
+
+# Fetch model from environment variable
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "mistral")  # Default to 'mistral'
 
 def load_metadata():
     """Load existing metadata or return an empty dictionary."""
@@ -41,7 +43,6 @@ def store_in_faiss(chunks, model, uid):
     print(f"DEBUG: Storing {len(chunks)} chunks in FAISS with model: {model}")
 
     try:
-        # Initialize Ollama embedding model
         embeddings = OllamaEmbeddings(model=model)
         print(f"DEBUG: Embedding model {model} initialized")
     except Exception as e:
@@ -56,22 +57,24 @@ def store_in_faiss(chunks, model, uid):
     print(f"DEBUG: Metadata for UID {uid}: {metadatas}")
 
     try:
-        print(f"DEBUG: Loading FAISS index from {FAISS_INDEX_PATH}...")
-        vector_store = FAISS.load_local(FAISS_INDEX_PATH, embeddings, allow_dangerous_deserialization=True)
-        print("DEBUG: Adding chunks to FAISS...")
-
         # Create request to Ollama API for embeddings
-        response = requests.post('http://ollama:11434/api/generate', json={'model': model, 'prompt': chunks})
+        response = requests.post('http://ollama:11434/api/generate', json={'model': model, 'prompt': chunks}, stream=True)
         
         if response.status_code == 200:
             print("DEBUG: Successfully received embeddings from Ollama")
-            response_data = response.json()  # Get full response
-            print(f"DEBUG: Full response from Ollama: {response_data}")
+            content = ''
+            for line in response.iter_lines():
+                if line:
+                    content += line.decode('utf-8')
+            
+            print(f"DEBUG: Full response received: {content}")
 
             # Add embeddings to FAISS
+            vector_store = FAISS.load_local(FAISS_INDEX_PATH, embeddings, allow_dangerous_deserialization=True)
             vector_store.add_texts(chunks, metadatas=metadatas)
-            print(f"DEBUG: Saving FAISS index at {FAISS_INDEX_PATH}...")
             vector_store.save_local(FAISS_INDEX_PATH)
+
+            print(f"DEBUG: Successfully stored embeddings for UID {uid}")
         else:
             print(f"DEBUG: Failed to get embeddings from Ollama: {response.text}")
             raise Exception("Ollama API request failed")

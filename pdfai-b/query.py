@@ -11,23 +11,24 @@ OLLAMA_URL = f"http://{OLLAMA_SERVICE}:11434"
 # Standard model selection
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "mistral")
 
-def load_vector_store():
-    """Loads stored text chunks from FAISS using the correct embeddings."""
-    return FAISS.load_local("/app/faiss_index", OllamaEmbeddings(model=OLLAMA_MODEL), allow_dangerous_deserialization=True)
-
 def query_ai(query, uid=None):
     """Retrieves relevant text and generates an AI answer using Ollama.
     
     - If `uid` is provided, retrieves only the specific document's embeddings using FAISS filtering.
     - Otherwise, searches across all uploaded documents.
     """
-    vector_store = load_vector_store()
+    # Initialize Ollama embeddings
+    embeddings = OllamaEmbeddings(model=OLLAMA_MODEL)
+    
+    # Load the vector store (FAISS)
+    vector_store = FAISS.load_local("/app/faiss_index", embeddings, allow_dangerous_deserialization=True)
 
     # Debug print
     print(f"DEBUG: Connecting to Ollama at {OLLAMA_URL} with model {OLLAMA_MODEL}")
 
     metadata = load_metadata()
 
+    # If UID is provided, filter FAISS results by UID
     if uid:
         if uid not in metadata:
             return f"Error: No document found with UID {uid}"
@@ -36,7 +37,7 @@ def query_ai(query, uid=None):
         retriever = vector_store.as_retriever(search_kwargs={"filter": {"uid": str(uid)}})
 
     else:
-        # Retrieve results from all documents
+        # Retrieve results from all documents if UID is not provided
         retriever = vector_store.as_retriever()
 
     # Use Ollama for answering queries
