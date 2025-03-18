@@ -35,7 +35,7 @@ def initialize_faiss(embeddings):
 def store_in_faiss(chunks, model, uid):
     """Stores extracted text chunks in FAISS and updates metadata."""
     print(f"DEBUG: Storing {len(chunks)} chunks in FAISS with model: {model}")
-    
+
     try:
         embeddings = OllamaEmbeddings(model=model)
         print(f"DEBUG: Embedding model {model} initialized")
@@ -67,3 +67,4 @@ def store_in_faiss(chunks, model, uid):
         "file_size": len(chunks),
     }
     save_metadata(metadata)  # Save back to file
+    print(f"DEBUG: Metadata updated for UID {uid}")
