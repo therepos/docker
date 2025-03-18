@@ -1,6 +1,7 @@
 import os
 import datetime
 import json
+import requests
 from langchain_ollama import OllamaEmbeddings
 from langchain_community.vectorstores import FAISS
 
@@ -40,6 +41,7 @@ def store_in_faiss(chunks, model, uid):
     print(f"DEBUG: Storing {len(chunks)} chunks in FAISS with model: {model}")
 
     try:
+        # Initialize Ollama embedding model
         embeddings = OllamaEmbeddings(model=model)
         print(f"DEBUG: Embedding model {model} initialized")
     except Exception as e:
@@ -53,15 +55,27 @@ def store_in_faiss(chunks, model, uid):
     metadatas = [{"uid": uid} for _ in chunks]
     print(f"DEBUG: Metadata for UID {uid}: {metadatas}")
 
-    # Load existing FAISS index if available
     try:
         print(f"DEBUG: Loading FAISS index from {FAISS_INDEX_PATH}...")
         vector_store = FAISS.load_local(FAISS_INDEX_PATH, embeddings, allow_dangerous_deserialization=True)
         print("DEBUG: Adding chunks to FAISS...")
-        vector_store.add_texts(chunks, metadatas=metadatas)
-        print(f"DEBUG: Saving FAISS index at {FAISS_INDEX_PATH}...")
-        vector_store.save_local(FAISS_INDEX_PATH)
-        print(f"DEBUG: Successfully stored embeddings for UID {uid}")
+
+        # Create request to Ollama API for embeddings
+        response = requests.post('http://ollama:11434/api/generate', json={'model': model, 'prompt': chunks})
+        
+        if response.status_code == 200:
+            print("DEBUG: Successfully received embeddings from Ollama")
+            response_data = response.json()  # Get full response
+            print(f"DEBUG: Full response from Ollama: {response_data}")
+
+            # Add embeddings to FAISS
+            vector_store.add_texts(chunks, metadatas=metadatas)
+            print(f"DEBUG: Saving FAISS index at {FAISS_INDEX_PATH}...")
+            vector_store.save_local(FAISS_INDEX_PATH)
+        else:
+            print(f"DEBUG: Failed to get embeddings from Ollama: {response.text}")
+            raise Exception("Ollama API request failed")
+
     except Exception as e:
         print(f"DEBUG: FAISS storage failed - {str(e)}")
         raise Exception(f"Error storing embeddings: {str(e)}")
