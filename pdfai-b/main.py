@@ -64,18 +64,28 @@ async def upload_file(file: UploadFile = File(...)):
     text_filename = f"{uid}.txt"
     text_path = os.path.join(UPLOAD_DIR, text_filename)
 
+    # Debug
+    print(f"DEBUG: Upload started for {file.filename}, UID: {uid}")
+    print(f"DEBUG: Using Ollama model: {os.getenv('OLLAMA_MODEL')} at {os.getenv('OLLAMA_SERVICE')}")
+
     try:
         file_path = os.path.join(UPLOAD_DIR, file.filename)
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
         extracted_text = extract_text(file_path)
+        # Debug
+        print(f"DEBUG: Extracted text length: {len(extracted_text)} characters")
         if extracted_text.strip():
             with open(text_path, "w", encoding="utf-8") as text_file:
                 text_file.write(extracted_text)
 
             chunks = chunk_text(extracted_text)
+            # Debug
+            print(f"DEBUG: Chunks created: {len(chunks)}")
             store_in_faiss(chunks, os.getenv("OLLAMA_MODEL", "mistral"), uid)
+            # Debug
+            print(f"DEBUG: Chunks created: {len(chunks)}")
 
             os.remove(file_path)
 
@@ -94,6 +104,8 @@ async def upload_file(file: UploadFile = File(...)):
             return {"file": file.filename, "message": "No text extracted."}
 
     except Exception as e:
+        # Debug
+        print(f"DEBUG: Chunks created: {len(chunks)}")
         return {"file": file.filename, "message": f"Error processing file: {str(e)}"}
 
 @app.post("/upload/bulk/")
@@ -153,7 +165,7 @@ def bulk_delete(uids: list[str]):
             # Remove FAISS vector
             vector_store = FAISS.load_local("/app/faiss_index", OllamaEmbeddings(), allow_dangerous_deserialization=True)
             vector_store.delete([uid])
-            vector_store.save_local("/app/faiss_index")  # ✅ Ensure FAISS index updates after deletion
+            vector_store.save_local("/app/faiss_index")  # Ensure FAISS index updates after deletion
 
             # Remove text file
             if os.path.exists(text_path):

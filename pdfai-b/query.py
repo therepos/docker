@@ -22,6 +22,10 @@ def query_ai(query, uid=None):
     - Otherwise, searches across all uploaded documents.
     """
     vector_store = load_vector_store()
+
+    # Debug print
+    print(f"DEBUG: Connecting to Ollama at {OLLAMA_URL} with model {OLLAMA_MODEL}")
+
     metadata = load_metadata()
 
     if uid:
@@ -43,4 +47,6 @@ def query_ai(query, uid=None):
         response = qa_chain.invoke({"query": query})
         return response
     except Exception as e:
+        # Debug
+        print(f"DEBUG: Ollama connection failed - {str(e)}")
         return f"Error processing query: {str(e)}"
