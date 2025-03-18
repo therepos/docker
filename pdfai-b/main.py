@@ -96,6 +96,19 @@ async def upload_file(file: UploadFile = File(...)):
     except Exception as e:
         return {"file": file.filename, "message": f"Error processing file: {str(e)}"}
 
+@app.post("/upload/bulk/")
+async def bulk_upload(files: list[UploadFile] = File(...)):
+    """Uploads multiple files, extracts text, and stores them in FAISS."""
+    uploaded_files = []
+    for file in files:
+        try:
+            result = await upload_file(file)  # Call existing function
+            uploaded_files.append(result)
+        except Exception as e:
+            uploaded_files.append({"file": file.filename, "error": str(e)})
+
+    return {"message": "Bulk upload complete", "results": uploaded_files}
+
 @app.get("/files/")
 def list_extracted_files():
     """Lists available extracted text files."""
@@ -122,6 +135,40 @@ def delete_extracted_text(uid: str):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error deleting file: {str(e)}")
+
+@app.delete("/delete/bulk/")
+def bulk_delete(uids: list[str]):
+    """Deletes multiple extracted files and embeddings."""
+    metadata = load_metadata()
+    deleted_files = []
+
+    for uid in uids:
+        if uid not in metadata:
+            deleted_files.append({"uid": uid, "error": "File not found."})
+            continue
+
+        text_path = os.path.join(UPLOAD_DIR, metadata[uid]["stored_filename"])
+
+        try:
+            # Remove FAISS vector
+            vector_store = FAISS.load_local("/app/faiss_index", OllamaEmbeddings(), allow_dangerous_deserialization=True)
+            vector_store.delete([uid])
+            vector_store.save_local("/app/faiss_index")  # ✅ Ensure FAISS index updates after deletion
+
+            # Remove text file
+            if os.path.exists(text_path):
+                os.remove(text_path)
+
+            # Remove metadata
+            del metadata[uid]
+            save_metadata(metadata)
+
+            deleted_files.append({"uid": uid, "message": "Deleted successfully."})
+
+        except Exception as e:
+            deleted_files.append({"uid": uid, "error": str(e)})
+
+    return {"message": "Bulk delete complete", "results": deleted_files}
 
 @app.get("/query/")
 def query_extracted_text(uid: str = None, question: str = None):
