@@ -53,7 +53,8 @@ def switch_model(new_model: str):
         return {"detail": "Failed to save active model selection."}
 
     # **Create new FAISS index path**
-    new_faiss_path = f"{FAISS_BASE_PATH}/faiss_index_{new_model}"
+    FAISS_INDEX_PATH = os.getenv("FAISS_INDEX_PATH", f"{FAISS_BASE_PATH}/faiss_index_{new_model}")
+    new_faiss_path = FAISS_INDEX_PATH
     os.environ["FAISS_INDEX_PATH"] = new_faiss_path  
 
     # **Ensure directory exists**

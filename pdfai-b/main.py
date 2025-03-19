@@ -190,14 +190,8 @@ def delete_file(uid: str):
 
 @app.delete("/delete/all/")
 def delete_all_files():
-    """Deletes all uploaded files and all FAISS indexes."""
+    """Deletes all uploaded files and FAISS indexes, ensuring cleanup always runs."""
     try:
-        metadata = load_metadata()
-        
-        # Check if there are files to delete
-        if not metadata:
-            return {"message": "No files to delete."}
-
         # Remove all uploaded files
         shutil.rmtree(UPLOAD_DIR, ignore_errors=True)
         os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -209,7 +203,7 @@ def delete_all_files():
                 shutil.rmtree(os.path.join(FAISS_BASE_PATH, folder), ignore_errors=True)
                 faiss_indexes_deleted += 1
 
-        # Clear metadata
+        # Clear metadata (if it exists)
         if os.path.exists(METADATA_FILE):
             os.remove(METADATA_FILE)
 
@@ -242,5 +236,15 @@ def get_active_faiss_model():
 
 @app.post("/switch_model/")
 def switch_model_endpoint(new_model: str):
-    return switch_model(new_model)
+    """Switch to a new model and update the global FAISS path."""
+    result = switch_model(new_model)
+
+    # Ensure main.py knows the new model
+    global OLLAMA_MODEL
+    OLLAMA_MODEL = new_model
+    os.environ["OLLAMA_MODEL"] = new_model
+    os.environ["FAISS_INDEX_PATH"] = f"{FAISS_BASE_PATH}/faiss_index_{new_model}"
+
+    return result
+
 
