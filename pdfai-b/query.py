@@ -1,4 +1,5 @@
 import os
+import traceback 
 from langchain_community.vectorstores import FAISS
 from langchain.chains import RetrievalQA
 from langchain_ollama import OllamaLLM, OllamaEmbeddings
