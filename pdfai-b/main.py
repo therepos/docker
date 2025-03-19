@@ -14,7 +14,6 @@ from process import chunk_text
 from query import query_ai
 from langchain_community.vectorstores import FAISS
 from langchain_ollama import OllamaEmbeddings
-from datetime import datetime
 
 # Constants
 UPLOAD_DIR = "data"
@@ -97,7 +96,7 @@ async def upload_file(files: list[UploadFile] = File(...)):
                     "original_filename": file.filename,
                     "stored_filename": text_filename,
                     "size_kb": round(len(extracted_text) / 1024, 2),
-                    "last_modified": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "last_modified": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     "model_used": OLLAMA_MODEL
                 }
                 uploaded_files.append({"file": file.filename, "message": "Text stored in FAISS."})
