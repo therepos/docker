@@ -114,13 +114,20 @@ def list_files():
     metadata = load_metadata()
     return {"files": metadata}
 
-@app.get("/download/{filename}/")
-async def download_file(filename: str):
-    """Downloads a specific uploaded file."""
-    file_path = os.path.join(UPLOAD_DIR, filename)
-    if not os.path.exists(file_path):
+@app.get("/download/{uid}/")
+async def download_file(uid: str):
+    """Downloads extracted text file by UID."""
+    metadata = load_metadata()
+
+    if uid not in metadata:
         raise HTTPException(status_code=404, detail="File not found.")
-    return FileResponse(file_path, media_type="text/plain", filename=filename)
+
+    file_path = os.path.join(UPLOAD_DIR, metadata[uid]["stored_filename"])
+
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Extracted text file not found.")
+
+    return FileResponse(file_path, media_type="text/plain", filename=metadata[uid]["original_filename"] + ".txt")
 
 @app.get("/export_all/")
 async def export_all_files():
@@ -209,16 +216,30 @@ def delete_all_files():
 
 @app.post("/switch_model/")
 def switch_model(new_model: str):
-    """Switches the model and forces reindexing to prevent FAISS mixing."""
+    """Switches the model and reprocesses FAISS instead of resetting it."""
     global OLLAMA_MODEL
     OLLAMA_MODEL = new_model
     os.environ["OLLAMA_MODEL"] = new_model
 
-    # Reinitialize FAISS instead of delete_all()
-    embeddings = OllamaEmbeddings(model=OLLAMA_MODEL, base_url=OLLAMA_BASE_URL)
-    vector_store = FAISS.from_texts(["FAISS Initialized"], embeddings)
-    vector_store.save_local(FAISS_INDEX_PATH)
+    metadata = load_metadata()
+    all_texts = []
+
+    # Extract all stored text files and reprocess them
+    for uid, data in metadata.items():
+        text_path = os.path.join(UPLOAD_DIR, data["stored_filename"])
+        if os.path.exists(text_path):
+            with open(text_path, "r", encoding="utf-8") as f:
+                text = f.read().strip()
+                if text:
+                    all_texts.append(text)
+
+    # Reprocess FAISS with the new model
+    if all_texts:
+        embeddings = OllamaEmbeddings(model=OLLAMA_MODEL, base_url=OLLAMA_BASE_URL)
+        vector_store = FAISS.from_texts(all_texts, embeddings)
+        vector_store.save_local(FAISS_INDEX_PATH)
 
     save_model_label()
-    return {"message": f"Model switched to {new_model}. FAISS reindexed."}
+    return {"message": f"Model switched to {new_model}. FAISS reprocessed with the new model."}
+
 
