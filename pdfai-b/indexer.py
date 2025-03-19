@@ -26,13 +26,13 @@ def list_faiss_indexes():
     return [folder for folder in os.listdir(FAISS_BASE_PATH) if folder.startswith("faiss_index_")]
 
 def switch_model(new_model: str):
-    """Switches to a new model, reindexes data, and deletes the old FAISS index."""
+    """Switches to a new model, reindexes data, and resets FAISS cache."""
     global OLLAMA_MODEL
 
-    print(f"DEBUG: Initiating model switch to {new_model}...")
+    print(f"DEBUG: Switching model to {new_model}...")
 
     # **Get current FAISS path before switching**
-    old_faiss_path = os.getenv("FAISS_INDEX_PATH", f"{FAISS_BASE_PATH}/faiss_index_mistral")
+    old_faiss_path = os.getenv("FAISS_INDEX_PATH", f"{FAISS_BASE_PATH}/faiss_index_{OLLAMA_MODEL}")
     print(f"DEBUG: Current FAISS index: {old_faiss_path}")
 
     # **List existing FAISS indexes before switching**
@@ -53,8 +53,7 @@ def switch_model(new_model: str):
         return {"detail": "Failed to save active model selection."}
 
     # **Create new FAISS index path**
-    FAISS_INDEX_PATH = os.getenv("FAISS_INDEX_PATH", f"{FAISS_BASE_PATH}/faiss_index_{new_model}")
-    new_faiss_path = FAISS_INDEX_PATH
+    new_faiss_path = f"{FAISS_BASE_PATH}/faiss_index_{new_model}"
     os.environ["FAISS_INDEX_PATH"] = new_faiss_path  
 
     # **Ensure directory exists**
@@ -65,7 +64,7 @@ def switch_model(new_model: str):
         print(f"ERROR: Failed to create FAISS directory: {str(e)}")
         return {"detail": "FAISS index creation failed: Directory error."}
 
-    # Load metadata to get stored text files
+    # **Load metadata to get stored text files**
     metadata = load_metadata()
     text_chunks = []
     print(f"DEBUG: Loaded metadata with {len(metadata)} entries.")
@@ -88,30 +87,32 @@ def switch_model(new_model: str):
     print(f"DEBUG: Total text chunks collected for FAISS re-indexing: {len(text_chunks)}")
 
     # **Check if there are chunks to index**
-    if not text_chunks:
-        print("ERROR: No text chunks found for FAISS re-indexing.")
-        return {"detail": "FAISS index creation failed due to missing text data."}
-
-    # **Try creating and saving FAISS index**
     try:
         print("DEBUG: Initializing FAISS embeddings and storing data...")
         embeddings = OllamaEmbeddings(model=new_model, base_url="http://ollama:11434")
-        faiss_index = FAISS.from_texts(text_chunks, embeddings)
+
+        if text_chunks:
+            faiss_index = FAISS.from_texts(text_chunks, embeddings)
+        else:
+            faiss_index = FAISS.from_texts(["FAISS RESET"], embeddings)  # Prevent empty FAISS error
+
         faiss_index.save_local(new_faiss_path)
         print(f"DEBUG: FAISS index successfully saved at {new_faiss_path}")
+
+        # **Update FAISS memory to clear cache**
+        global FAISS_INDEX
+        FAISS_INDEX = FAISS.load_local(new_faiss_path, embeddings)
+        print("DEBUG: FAISS memory cleared and reloaded with new model.")
+
     except Exception as e:
         print(f"ERROR: Failed to create FAISS index: {str(e)}")
-        print(traceback.format_exc())  # Log full error traceback
+        print(traceback.format_exc())
         shutil.rmtree(new_faiss_path, ignore_errors=True)
         return {"detail": f"FAISS index creation failed: {str(e)}"}
-
-    # **List FAISS indexes after switch**
-    faiss_after = list_faiss_indexes()
-    print(f"DEBUG: Existing FAISS indexes after switch: {faiss_after}")
 
     # **Delete the old FAISS index since it's no longer used**
     if os.path.exists(old_faiss_path):
         print(f"DEBUG: Deleting old FAISS index: {old_faiss_path}")
         shutil.rmtree(old_faiss_path, ignore_errors=True)
 
-    return {"message": f"Model switched to {new_model}. New FAISS index created and reindexed, old index deleted."}
+    return {"message": f"Model switched to {new_model}. New FAISS index created, loaded into memory, and old index deleted."}

@@ -173,7 +173,7 @@ from langchain_ollama import OllamaEmbeddings
 
 @app.delete("/delete/all/")
 def delete_all_files():
-    """Deletes all uploaded files, clears metadata, and resets FAISS."""
+    """Deletes all uploaded files, clears metadata, resets FAISS, and ensures FAISS memory is cleared."""
     try:
         # **STEP 1: Delete All Data Files**
         if os.path.exists(UPLOAD_DIR):
@@ -196,7 +196,7 @@ def delete_all_files():
         try:
             # **Initialize a new FAISS index and point to it**
             embeddings = OllamaEmbeddings(model=OLLAMA_MODEL, base_url="http://ollama:11434")
-            new_faiss_index = FAISS.from_texts(["FAISS RESET"], embeddings)  # Dummy text
+            new_faiss_index = FAISS.from_texts([], embeddings)  # Empty FAISS
             new_faiss_index.save_local(new_faiss_path)  # Save empty FAISS
 
             # **Update FAISS path**
@@ -211,6 +211,11 @@ def delete_all_files():
             # **Rename the new FAISS index to match the original path**
             os.rename(new_faiss_path, old_faiss_path)
             print(f"DEBUG: FAISS successfully reset at {old_faiss_path}")
+
+            # **Force FAISS Memory Refresh**
+            global FAISS_INDEX
+            FAISS_INDEX = FAISS.load_local(old_faiss_path, embeddings)
+            print("DEBUG: FAISS memory cleared and reloaded.")
 
         except Exception as e:
             print(f"ERROR: Failed to reset FAISS: {str(e)}")
