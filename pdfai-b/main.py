@@ -5,7 +5,7 @@ import random
 import string
 import zipfile
 import json
-import datetime
+from datetime import datetime
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import FileResponse
 from extract import extract_text
