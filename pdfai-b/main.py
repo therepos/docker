@@ -5,6 +5,7 @@ import random
 import string
 import zipfile
 import json
+import traceback
 from datetime import datetime
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import FileResponse
@@ -210,57 +211,31 @@ def delete_file(filename: str):
 
 @app.delete("/delete/all/")
 def delete_all_files():
-    """Deletes all uploaded files, clears extracted text, and resets FAISS."""
+    """Deletes all uploaded files and all FAISS indexes."""
     try:
-        # Step 1: Remove all data files
+        # Remove all uploaded files
         shutil.rmtree(UPLOAD_DIR, ignore_errors=True)
         os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-        # Step 2: Reset FAISS
-        embeddings = OllamaEmbeddings(model=OLLAMA_MODEL, base_url=OLLAMA_BASE_URL)
-        vector_store = FAISS.from_texts(["FAISS Initialized"], embeddings)
-        vector_store.save_local(FAISS_INDEX_PATH)
+        # Remove all FAISS indexes
+        for model_index in os.listdir("/app/"):
+            if model_index.startswith("faiss_index_"):
+                shutil.rmtree(f"/app/{model_index}", ignore_errors=True)
 
         # Clear metadata
         if os.path.exists(METADATA_FILE):
             os.remove(METADATA_FILE)
 
-        return {"message": "All files, extracted text, and FAISS index have been reset."}
-    
+        return {"message": "All files and FAISS indexes have been deleted."}
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error resetting system: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error deleting files and indexes: {str(e)}")
 
-@app.post("/switch_model/")
-def switch_model(new_model: str):
-    """Switches the model and fully resets FAISS before reprocessing to prevent mixed embedding dimensions."""
-    global OLLAMA_MODEL
-    OLLAMA_MODEL = new_model
-    os.environ["OLLAMA_MODEL"] = new_model
-
-    metadata = load_metadata()
-    all_texts = []
-
-    # Extract all stored text files
-    for uid, data in metadata.items():
-        text_path = os.path.join(UPLOAD_DIR, data["stored_filename"])
-        if os.path.exists(text_path):
-            with open(text_path, "r", encoding="utf-8") as f:
-                text = f.read().strip()
-                if text:
-                    all_texts.append(text)
-
-    # **Delete FAISS index before reprocessing** to avoid mixed dimensions
-    shutil.rmtree(FAISS_INDEX_PATH, ignore_errors=True)
-    os.makedirs(FAISS_INDEX_PATH, exist_ok=True)
-
-    # Reprocess FAISS with the new model
-    if all_texts:
-        embeddings = OllamaEmbeddings(model=OLLAMA_MODEL, base_url=OLLAMA_BASE_URL)
-        vector_store = FAISS.from_texts(all_texts, embeddings)
-        vector_store.save_local(FAISS_INDEX_PATH)
-
-    save_model_label()
-    return {"message": f"Model switched to {new_model}. FAISS fully reset and reprocessed with the new model."}
+@app.get("/faiss_model/")
+def get_active_faiss_model():
+    """Returns the current FAISS index in use."""
+    faiss_model = os.getenv("FAISS_INDEX_PATH", "/app/faiss_index_mistral")  # Default to mistral if missing
+    return {"active_faiss_model": faiss_model}
 
 @app.get("/current_model/")
 def get_current_model():
@@ -268,3 +243,24 @@ def get_current_model():
     return {"current_model": OLLAMA_MODEL}
 
 
+@app.post("/switch_model/")
+def switch_model(new_model: str):
+    """Switches to the specified model and ensures the correct FAISS index is used."""
+    global OLLAMA_MODEL
+    OLLAMA_MODEL = new_model
+    os.environ["OLLAMA_MODEL"] = new_model
+    save_model_label()
+
+    print(f"DEBUG: Model switched to {new_model}. Now pointing to correct FAISS index...")
+
+    faiss_path = f"/app/faiss_index_{new_model}"  # New FAISS path for each model
+    os.environ["FAISS_INDEX_PATH"] = faiss_path  # Store FAISS path in env variable
+
+    # Ensure FAISS directory exists
+    if not os.path.exists(faiss_path):
+        print(f"DEBUG: No FAISS index found for {new_model}, creating new one...")
+        os.makedirs(faiss_path, exist_ok=True)
+        embeddings = OllamaEmbeddings(model=OLLAMA_MODEL, base_url=OLLAMA_BASE_URL)
+        FAISS.from_texts(["FAISS Initialized"], embeddings).save_local(faiss_path)
+
+    return {"message": f"Model switched to {new_model}. Now using FAISS index: {faiss_path}"}
