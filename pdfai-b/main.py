@@ -83,18 +83,26 @@ async def upload_file(files: list[UploadFile] = File(...)):
             with open(file_path, "wb") as buffer:
                 shutil.copyfileobj(file.file, buffer)
 
-                if file.filename.endswith(".txt"):
-                    extracted_text = (await file.read()).decode("utf-8")
-                else:
-                    extracted_text = extract_text(file_path)
+            # Read content only once
+            if file.filename.endswith(".txt"):
+                with open(file_path, "r", encoding="utf-8") as f:
+                    extracted_text = f.read()
+            else:
+                extracted_text = extract_text(file_path)
 
             if extracted_text.strip():
                 with open(text_path, "w", encoding="utf-8") as text_file:
                     text_file.write(extracted_text)
 
                 chunks = chunk_text(extracted_text)
-                store_in_faiss(chunks)
-                os.remove(file_path)
+                if chunks:
+                    store_in_faiss(chunks)  # Store directly in FAISS
+                    os.remove(file_path)  # Cleanup after processing
+                else:
+                    print(f"DEBUG: No chunks created for {file.filename}")
+
+        except Exception as e:
+            print(f"ERROR processing {file.filename}: {e}")
 
                 metadata[uid] = {
                     "uid": uid,
