@@ -6,6 +6,7 @@ import string
 import zipfile
 import json
 import traceback
+import time
 from datetime import datetime
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import FileResponse
@@ -18,20 +19,28 @@ from langchain_ollama import OllamaEmbeddings
 
 # Constants
 UPLOAD_DIR = "data"
-FAISS_INDEX_PATH = "/app/faiss_index"
 EXPORT_DIR = "/app/export"
-FAISS_BACKUP_TEMPLATE = "/app/export/faiss_backup_{}.zip"
-MODEL_TRACK_FILE = "/app/faiss_model.txt"
+FAISS_BASE_PATH = "/app"
+MODEL_TRACK_FILE = "/app/active_model.txt"
 METADATA_FILE = os.path.join(UPLOAD_DIR, "files_metadata.json")
 
-# Environment variables
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "mistral")
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://ollama:11434")
+# **Load Last Used Model on Startup**
+if os.path.exists(MODEL_TRACK_FILE):
+    with open(MODEL_TRACK_FILE, "r") as f:
+        OLLAMA_MODEL = f.read().strip()
+else:
+    OLLAMA_MODEL = "mistral"  # Default model
+
+# Set FAISS path based on active model
+os.environ["OLLAMA_MODEL"] = OLLAMA_MODEL
+os.environ["FAISS_INDEX_PATH"] = f"{FAISS_BASE_PATH}/faiss_index_{OLLAMA_MODEL}"
+print(f"DEBUG: Loaded last used model: {OLLAMA_MODEL}")
 
 app = FastAPI()
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(EXPORT_DIR, exist_ok=True)
 
+# **Helper Functions**
 def save_metadata(metadata):
     """Writes metadata to a JSON file."""
     with open(METADATA_FILE, "w") as f:
@@ -48,18 +57,7 @@ def generate_uid():
     """Generates a unique 12-character alphanumeric UID."""
     return ''.join(random.choices(string.ascii_letters + string.digits, k=12))
 
-def save_model_label():
-    """Saves the current model to a file for export labeling."""
-    with open(MODEL_TRACK_FILE, "w") as f:
-        f.write(OLLAMA_MODEL)
-
-def load_model_label():
-    """Loads the model label from an exported FAISS index."""
-    if os.path.exists(MODEL_TRACK_FILE):
-        with open(MODEL_TRACK_FILE, "r") as f:
-            return f.read().strip()
-    return None
-
+# **File Management Endpoints**
 @app.get("/")
 def about():
     """Returns API status."""
@@ -67,10 +65,9 @@ def about():
 
 @app.post("/upload/")
 async def upload_file(files: list[UploadFile] = File(...)):
-    """Uploads files, extracts text if necessary, and stores embeddings in FAISS."""
+    """Uploads files, extracts text, and stores embeddings in FAISS."""
     metadata = load_metadata()
     uploaded_files = []
-    save_model_label()
 
     for file in files:
         uid = generate_uid()
@@ -113,75 +110,70 @@ async def upload_file(files: list[UploadFile] = File(...)):
 @app.get("/list_files/")
 def list_files():
     """Lists all uploaded files with metadata including the model used."""
-    metadata = load_metadata()
-    return {"files": metadata}
+    return {"files": load_metadata()}
 
-@app.get("/download/{uid}/")
-async def download_file(uid: str):
-    """Downloads extracted text file by UID."""
-    metadata = load_metadata()
+@app.get("/current_model/")
+def get_current_model():
+    """Returns the current model being used for FAISS and queries."""
+    return {"current_model": OLLAMA_MODEL}
 
-    if uid not in metadata:
-        raise HTTPException(status_code=404, detail="File not found.")
+@app.get("/faiss_model/")
+def get_active_faiss_model():
+    """Returns the FAISS index in use."""
+    return {"active_faiss_index": os.getenv("FAISS_INDEX_PATH")}
 
-    file_path = os.path.join(UPLOAD_DIR, metadata[uid]["stored_filename"])
+@app.post("/switch_model/")
+def switch_model(new_model: str):
+    """Switches to the specified model, creates a new FAISS index, and deletes the old one."""
+    global OLLAMA_MODEL
 
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="Extracted text file not found.")
+    print(f"DEBUG: Switching model to {new_model}...")
 
-    return FileResponse(file_path, media_type="text/plain", filename=metadata[uid]["original_filename"] + ".txt")
+    # **Get current FAISS path before switching**
+    old_faiss_path = os.getenv("FAISS_INDEX_PATH", f"{FAISS_BASE_PATH}/faiss_index_mistral")
 
-@app.get("/export_all/")
-async def export_all_files():
-    """Compresses all uploaded files into a ZIP and returns it."""
-    zip_path = os.path.join(EXPORT_DIR, "data_export.zip")
-    shutil.make_archive(os.path.join(EXPORT_DIR, "data_export"), 'zip', UPLOAD_DIR)
-    return FileResponse(zip_path, media_type="application/zip", filename="data_export.zip")
+    # **Switch to the new model**
+    OLLAMA_MODEL = new_model
+    os.environ["OLLAMA_MODEL"] = new_model
 
-@app.get("/export_faiss/")
-async def export_faiss():
-    """Exports FAISS index as a backup file with a timestamp."""
+    # **Persist model selection**
+    with open(MODEL_TRACK_FILE, "w") as f:
+        f.write(new_model)
+
+    # **Create new FAISS index path**
+    new_faiss_path = f"{FAISS_BASE_PATH}/faiss_index_{new_model}"
+    os.environ["FAISS_INDEX_PATH"] = new_faiss_path  
+
+    # **Create new FAISS index**
+    print(f"DEBUG: Creating new FAISS index for {new_model}...")
+    os.makedirs(new_faiss_path, exist_ok=True)
+    embeddings = OllamaEmbeddings(model=new_model, base_url="http://ollama:11434")
+    FAISS.from_texts(["FAISS Initialized"], embeddings).save_local(new_faiss_path)
+
+    # **Delete the old FAISS index since it's no longer used**
+    if os.path.exists(old_faiss_path):
+        print(f"DEBUG: Deleting old FAISS index: {old_faiss_path}")
+        shutil.rmtree(old_faiss_path, ignore_errors=True)
+
+    return {"message": f"Model switched to {new_model}. New FAISS index created, old index deleted."}
+
+@app.delete("/delete/all/")
+def delete_all_files():
+    """Deletes all uploaded files and all FAISS indexes."""
     try:
-        save_model_label()
-        timestamp = datetime.now().strftime("%Y%m%d%H%M")
-        model_name = OLLAMA_MODEL.replace("/", "_")
-        backup_filename = f"faiss_backup_{model_name}_{timestamp}.zip"
-        backup_path = os.path.join(EXPORT_DIR, backup_filename)
+        shutil.rmtree(UPLOAD_DIR, ignore_errors=True)
+        os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-        shutil.make_archive(backup_path.replace(".zip", ""), 'zip', FAISS_INDEX_PATH)
+        for model_index in os.listdir(FAISS_BASE_PATH):
+            if model_index.startswith("faiss_index_"):
+                shutil.rmtree(f"{FAISS_BASE_PATH}/{model_index}", ignore_errors=True)
 
-        return FileResponse(backup_path, media_type="application/zip", filename=backup_filename)
-    
+        if os.path.exists(MODEL_TRACK_FILE):
+            os.remove(MODEL_TRACK_FILE)
+
+        return {"message": "All files and FAISS indexes have been deleted."}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error exporting FAISS index: {str(e)}")
-
-@app.post("/import_faiss/")
-async def import_faiss(file: UploadFile = File(...)):
-    """Restores FAISS index from a backup file and ensures model consistency."""
-    try:
-        # Save uploaded file
-        backup_path = os.path.join(EXPORT_DIR, file.filename)
-        with open(backup_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-
-        # Extract model name from filename (faiss_backup_MODEL_YYYYMMDDHHMM.zip)
-        match = re.search(r"faiss_backup_(.*?)_\d{12}\.zip", file.filename)
-        if not match:
-            raise HTTPException(status_code=400, detail="Invalid FAISS backup filename format.")
-        
-        imported_model = match.group(1)
-        
-        # Unpack FAISS backup
-        shutil.unpack_archive(backup_path, FAISS_INDEX_PATH, "zip")
-
-        # Check if model matches the active one, if not, switch
-        if imported_model != OLLAMA_MODEL:
-            switch_model(imported_model)
-
-        return {"message": f"FAISS index for {imported_model} successfully restored."}
-    
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error importing FAISS index: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error deleting files and indexes: {str(e)}")
 
 @app.get("/query/")
 def query_extracted_text(question: str):
@@ -191,76 +183,3 @@ def query_extracted_text(question: str):
         return {"question": question, "answer": response}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing query: {str(e)}")
-
-@app.delete("/delete/{filename}/")
-def delete_file(filename: str):
-    """Deletes a specific uploaded file."""
-    metadata = load_metadata()
-    file_path = os.path.join(UPLOAD_DIR, filename)
-
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="File not found.")
-
-    os.remove(file_path)
-    for uid, data in list(metadata.items()):
-        if data["stored_filename"] == filename:
-            del metadata[uid]
-
-    save_metadata(metadata)
-    return {"message": f"File {filename} deleted successfully."}
-
-@app.delete("/delete/all/")
-def delete_all_files():
-    """Deletes all uploaded files and all FAISS indexes."""
-    try:
-        # Remove all uploaded files
-        shutil.rmtree(UPLOAD_DIR, ignore_errors=True)
-        os.makedirs(UPLOAD_DIR, exist_ok=True)
-
-        # Remove all FAISS indexes
-        for model_index in os.listdir("/app/"):
-            if model_index.startswith("faiss_index_"):
-                shutil.rmtree(f"/app/{model_index}", ignore_errors=True)
-
-        # Clear metadata
-        if os.path.exists(METADATA_FILE):
-            os.remove(METADATA_FILE)
-
-        return {"message": "All files and FAISS indexes have been deleted."}
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error deleting files and indexes: {str(e)}")
-
-@app.get("/faiss_model/")
-def get_active_faiss_model():
-    """Returns the current FAISS index in use."""
-    faiss_model = os.getenv("FAISS_INDEX_PATH", "/app/faiss_index_mistral")  # Default to mistral if missing
-    return {"active_faiss_model": faiss_model}
-
-@app.get("/current_model/")
-def get_current_model():
-    """Returns the current model being used for FAISS and queries."""
-    return {"current_model": OLLAMA_MODEL}
-
-
-@app.post("/switch_model/")
-def switch_model(new_model: str):
-    """Switches to the specified model and ensures the correct FAISS index is used."""
-    global OLLAMA_MODEL
-    OLLAMA_MODEL = new_model
-    os.environ["OLLAMA_MODEL"] = new_model
-    save_model_label()
-
-    print(f"DEBUG: Model switched to {new_model}. Now pointing to correct FAISS index...")
-
-    faiss_path = f"/app/faiss_index_{new_model}"  # New FAISS path for each model
-    os.environ["FAISS_INDEX_PATH"] = faiss_path  # Store FAISS path in env variable
-
-    # Ensure FAISS directory exists
-    if not os.path.exists(faiss_path):
-        print(f"DEBUG: No FAISS index found for {new_model}, creating new one...")
-        os.makedirs(faiss_path, exist_ok=True)
-        embeddings = OllamaEmbeddings(model=OLLAMA_MODEL, base_url=OLLAMA_BASE_URL)
-        FAISS.from_texts(["FAISS Initialized"], embeddings).save_local(faiss_path)
-
-    return {"message": f"Model switched to {new_model}. Now using FAISS index: {faiss_path}"}
