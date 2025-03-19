@@ -209,12 +209,23 @@ def delete_all_files():
 
 @app.get("/query/")
 def query_extracted_text(question: str):
-    """Queries the extracted text using AI."""
+    """Queries the extracted text using FAISS, but returns a clear error if no index exists."""
     try:
+        faiss_path = os.getenv("FAISS_INDEX_PATH", f"{FAISS_BASE_PATH}/faiss_index_{OLLAMA_MODEL}")
+
+        # **Ensure FAISS Index Exists Before Querying**
+        if not os.path.exists(faiss_path) or not any(fname.endswith(".faiss") for fname in os.listdir(faiss_path)):
+            return {
+                "question": question,
+                "answer": "No data available. Please upload files first before querying."
+            }
+
+        # **If FAISS exists, proceed with querying**
         response = query_ai(question)
         return {"question": question, "answer": response}
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error processing query: {str(e)}")
+        return {"question": question, "answer": f"Error processing query: {str(e)}"}
 
 @app.get("/current_model/")
 def get_current_model():
