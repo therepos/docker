@@ -209,18 +209,18 @@ def delete_all_files():
 
 @app.get("/query/")
 def query_extracted_text(question: str):
-    """Queries the extracted text using FAISS, but returns a clear error if no index exists."""
+    """Queries the extracted text using FAISS, with a friendly message if no data is available."""
     try:
         faiss_path = os.getenv("FAISS_INDEX_PATH", f"{FAISS_BASE_PATH}/faiss_index_{OLLAMA_MODEL}")
 
-        # **Ensure FAISS Index Exists Before Querying**
-        if not os.path.exists(faiss_path) or not any(fname.endswith(".faiss") for fname in os.listdir(faiss_path)):
+        # **Only check metadata, do NOT change FAISS handling**
+        if not os.path.exists(METADATA_FILE) or os.stat(METADATA_FILE).st_size == 0:
             return {
                 "question": question,
-                "answer": "No data available. Please upload files first before querying."
+                "answer": "No documents available to process. Please upload files first."
             }
 
-        # **If FAISS exists, proceed with querying**
+        # **Run the query as it worked before**
         response = query_ai(question)
         return {"question": question, "answer": response}
 
