@@ -72,30 +72,21 @@ async def upload_file(files: list[UploadFile] = File(...)):
     """Uploads files, extracts text, and stores embeddings in FAISS."""
     
     # **Ensure upload directory exists**
-    if not os.path.exists(UPLOAD_DIR):
-        os.makedirs(UPLOAD_DIR, exist_ok=True)
-        print("DEBUG: Upload directory recreated.")
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
 
     metadata = load_metadata()
     uploaded_files = []
 
     for file in files:
-        # **Explicitly check if the file is an UploadFile**
-        if not isinstance(file, UploadFile):
-            print(f"ERROR: Received invalid file format: {type(file)}")
-            raise HTTPException(status_code=400, detail=f"Invalid file format received. Expected 'UploadFile', got {type(file)}")
-
-        uid = ''.join(random.choices(string.ascii_letters + string.digits, k=12))
+        uid = generate_uid()
         text_filename = f"{uid}.txt"
         text_path = os.path.join(UPLOAD_DIR, text_filename)
 
         try:
-            # **Save uploaded file**
             file_path = os.path.join(UPLOAD_DIR, file.filename)
             with open(file_path, "wb") as buffer:
                 shutil.copyfileobj(file.file, buffer)
 
-            # **Extract text from file**
             extracted_text = file.read().decode("utf-8") if file.filename.endswith(".txt") else extract_text(file_path)
 
             if extracted_text.strip():
@@ -122,7 +113,7 @@ async def upload_file(files: list[UploadFile] = File(...)):
             uploaded_files.append({"file": file.filename, "message": f"Error: {str(e)}"})
 
     save_metadata(metadata)
-    return {"message": "Upload complete", "results": uploaded_files}
+    return {"message": "Upload complete", "results": uploaded_files"}
 
 @app.get("/list_files/")
 def list_files():
