@@ -193,17 +193,28 @@ def delete_all_files():
     """Deletes all uploaded files, clears metadata, and removes FAISS indexes."""
     try:
         metadata = load_metadata()
-
-        # **Delete each file using existing delete_file() function**
         files_deleted = 0
-        for uid in list(metadata.keys()):  # Use list() to avoid RuntimeError when modifying dict
-            try:
-                delete_file(uid)  # Reuse the existing delete function
-                files_deleted += 1
-            except HTTPException as e:
-                print(f"WARNING: Failed to delete file with UID {uid}: {e.detail}")
 
-        # **Ensure upload directory is clean**
+        # **Delete each file (handling missing files gracefully)**
+        for uid in list(metadata.keys()):
+            file_path = os.path.join(UPLOAD_DIR, metadata[uid]["stored_filename"])
+            if os.path.exists(file_path):
+                try:
+                    os.remove(file_path)
+                    files_deleted += 1
+                    print(f"DEBUG: Deleted file {file_path}")
+                except Exception as e:
+                    print(f"ERROR: Failed to delete {file_path}: {str(e)}")
+            else:
+                print(f"WARNING: File {file_path} already missing. Removing from metadata.")
+
+            # **Remove metadata entry**
+            del metadata[uid]
+
+        # **Save cleaned metadata**
+        save_metadata(metadata)
+
+        # **Ensure upload directory is fully cleared**
         shutil.rmtree(UPLOAD_DIR, ignore_errors=True)
         os.makedirs(UPLOAD_DIR, exist_ok=True)
         print("DEBUG: Upload directory reset successfully.")
