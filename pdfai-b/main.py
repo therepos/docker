@@ -177,12 +177,9 @@ async def import_faiss(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error importing FAISS index: {str(e)}")
 
-from langchain_community.vectorstores import FAISS
-from langchain_ollama import OllamaEmbeddings
-
 @app.delete("/delete/all/")
 def delete_all_files():
-    """Deletes all uploaded files, clears metadata, and resets FAISS safely."""
+    """Deletes all files, clears FAISS index while keeping the folder."""
     try:
         global OLLAMA_MODEL
 
@@ -195,29 +192,20 @@ def delete_all_files():
         if os.path.exists(METADATA_FILE):
             os.remove(METADATA_FILE)
 
-        # Step 3: Create a New Empty FAISS Index
-        new_faiss_path = f"{FAISS_BASE_PATH}/faiss_index_empty"
-        os.makedirs(new_faiss_path, exist_ok=True)
-
-        embeddings = OllamaEmbeddings(model=OLLAMA_MODEL, base_url="http://ollama:11434")
-
-        # FIX: Add a small placeholder text to FAISS to prevent errors
-        placeholder_text = ["FAISS_INIT"]
-        faiss_index = FAISS.from_texts(placeholder_text, embeddings)
-        faiss_index.save_local(new_faiss_path)
-
-        # Step 4: Switch to the Empty FAISS Index
-        old_faiss_path = os.getenv("FAISS_INDEX_PATH", f"{FAISS_BASE_PATH}/faiss_index_{OLLAMA_MODEL}")
-        os.environ["FAISS_INDEX_PATH"] = new_faiss_path
-
-        # Step 5: Delete the Old FAISS Index
-        if os.path.exists(old_faiss_path):
-            shutil.rmtree(old_faiss_path, ignore_errors=True)
+        # Step 3: Delete FAISS Index Contents (But Keep the Folder)
+        faiss_path = "/mnt/sec/apps/pdfai/faiss_index"
+        if os.path.exists(faiss_path):
+            for file in os.listdir(faiss_path):
+                file_path = os.path.join(faiss_path, file)
+                if os.path.isfile(file_path) or os.path.islink(file_path):
+                    os.unlink(file_path)
+                elif os.path.isdir(file_path):
+                    shutil.rmtree(file_path)
 
         return {"message": "All files, metadata, and FAISS index have been reset."}
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error deleting everything: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error resetting FAISS: {str(e)}")
 
 @app.get("/query/")
 def query_extracted_text(question: str):
