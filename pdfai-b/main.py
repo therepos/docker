@@ -185,6 +185,28 @@ def delete_file(filename: str):
     save_metadata(metadata)
     return {"message": f"File {filename} deleted successfully."}
 
+@app.delete("/delete/all/")
+def delete_all_files():
+    """Deletes all uploaded files, clears extracted text, and resets FAISS."""
+    try:
+        # Step 1: Remove all data files
+        shutil.rmtree(UPLOAD_DIR, ignore_errors=True)
+        os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+        # Step 2: Reset FAISS
+        embeddings = OllamaEmbeddings(model=OLLAMA_MODEL, base_url=OLLAMA_BASE_URL)
+        vector_store = FAISS.from_texts(["FAISS Initialized"], embeddings)
+        vector_store.save_local(FAISS_INDEX_PATH)
+
+        # Clear metadata
+        if os.path.exists(METADATA_FILE):
+            os.remove(METADATA_FILE)
+
+        return {"message": "All files, extracted text, and FAISS index have been reset."}
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error resetting system: {str(e)}")
+
 @app.post("/switch_model/")
 def switch_model(new_model: str):
     """Switches the model and forces reindexing to prevent FAISS mixing."""
@@ -192,11 +214,11 @@ def switch_model(new_model: str):
     OLLAMA_MODEL = new_model
     os.environ["OLLAMA_MODEL"] = new_model
 
-    # Clear FAISS
+    # Reinitialize FAISS instead of delete_all()
     embeddings = OllamaEmbeddings(model=OLLAMA_MODEL, base_url=OLLAMA_BASE_URL)
-    vector_store = FAISS.load_local(FAISS_INDEX_PATH, embeddings, allow_dangerous_deserialization=True)
-    vector_store.delete_all()
+    vector_store = FAISS.from_texts(["FAISS Initialized"], embeddings)
     vector_store.save_local(FAISS_INDEX_PATH)
-    
+
     save_model_label()
     return {"message": f"Model switched to {new_model}. FAISS reindexed."}
+
