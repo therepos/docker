@@ -14,6 +14,7 @@ from extract import extract_text
 from store import store_in_faiss
 from process import chunk_text
 from query import query_ai
+from indexer import switch_model
 from langchain_community.vectorstores import FAISS
 from langchain_ollama import OllamaEmbeddings
 
@@ -240,58 +241,6 @@ def get_active_faiss_model():
     return {"active_faiss_index": os.getenv("FAISS_INDEX_PATH")}
 
 @app.post("/switch_model/")
-def switch_model(new_model: str):
-    """Switches to the specified model, creates a new FAISS index, reindexes data, and deletes the old one."""
-    global OLLAMA_MODEL
+def switch_model_endpoint(new_model: str):
+    return switch_model(new_model)
 
-    print(f"DEBUG: Switching model to {new_model}...")
-
-    # **Get current FAISS path before switching**
-    old_faiss_path = os.getenv("FAISS_INDEX_PATH", f"{FAISS_BASE_PATH}/faiss_index_mistral")
-
-    # **Switch to the new model**
-    OLLAMA_MODEL = new_model
-    os.environ["OLLAMA_MODEL"] = new_model
-
-    # **Persist model selection**
-    with open(MODEL_TRACK_FILE, "w") as f:
-        f.write(new_model)
-
-    # **Create new FAISS index path**
-    new_faiss_path = f"{FAISS_BASE_PATH}/faiss_index_{new_model}"
-    if os.path.exists(new_faiss_path):
-        os.environ["FAISS_INDEX_PATH"] = new_faiss_path
-    else:
-        raise HTTPException(status_code=500, detail="FAISS index creation failed.")
-
-    # **Create new FAISS index and reindex latest data**
-    print(f"DEBUG: Creating new FAISS index and reindexing data for {new_model}...")
-    os.makedirs(new_faiss_path, exist_ok=True)
-    
-    # Load metadata to get stored text files
-    metadata = load_metadata()
-    text_chunks = []
-
-    for item in metadata.values():
-        text_file_path = os.path.join(UPLOAD_DIR, item["stored_filename"])
-        if os.path.exists(text_file_path):
-            with open(text_file_path, "r", encoding="utf-8") as text_file:
-                text_chunks.extend(chunk_text(text_file.read()))
-
-    # Store reindexed data in the new FAISS index
-    try:
-        if text_chunks:
-            embeddings = OllamaEmbeddings(model=new_model, base_url="http://ollama:11434")
-            FAISS.from_texts(text_chunks, embeddings).save_local(new_faiss_path)
-        else:
-            print("WARNING: No text chunks found for FAISS re-indexing.")
-    except Exception as e:
-        print(f"ERROR: Failed to create FAISS index: {str(e)}")
-        shutil.rmtree(new_faiss_path, ignore_errors=True)  # Remove the failed index
-
-    # **Delete the old FAISS index since it's no longer used**
-    if os.path.exists(old_faiss_path):
-        print(f"DEBUG: Deleting old FAISS index: {old_faiss_path}")
-        shutil.rmtree(old_faiss_path, ignore_errors=True)
-
-    return {"message": f"Model switched to {new_model}. New FAISS index created and reindexed, old index deleted."}
