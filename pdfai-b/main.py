@@ -232,7 +232,7 @@ def delete_all_files():
 
 @app.post("/switch_model/")
 def switch_model(new_model: str):
-    """Switches the model and reprocesses FAISS to prevent mixed embedding dimensions."""
+    """Switches the model and fully resets FAISS before reprocessing to prevent mixed embedding dimensions."""
     global OLLAMA_MODEL
     OLLAMA_MODEL = new_model
     os.environ["OLLAMA_MODEL"] = new_model
@@ -249,7 +249,7 @@ def switch_model(new_model: str):
                 if text:
                     all_texts.append(text)
 
-    # **Clear FAISS before reprocessing** to avoid mixed dimensions
+    # **Delete FAISS index before reprocessing** to avoid mixed dimensions
     shutil.rmtree(FAISS_INDEX_PATH, ignore_errors=True)
     os.makedirs(FAISS_INDEX_PATH, exist_ok=True)
 
@@ -260,7 +260,7 @@ def switch_model(new_model: str):
         vector_store.save_local(FAISS_INDEX_PATH)
 
     save_model_label()
-    return {"message": f"Model switched to {new_model}. FAISS fully reprocessed with the new model."}
+    return {"message": f"Model switched to {new_model}. FAISS fully reset and reprocessed with the new model."}
 
 @app.get("/current_model/")
 def get_current_model():
