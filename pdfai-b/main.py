@@ -232,7 +232,7 @@ def delete_all_files():
 
 @app.post("/switch_model/")
 def switch_model(new_model: str):
-    """Switches the model and reprocesses FAISS instead of resetting it."""
+    """Switches the model and reprocesses FAISS to prevent mixed embedding dimensions."""
     global OLLAMA_MODEL
     OLLAMA_MODEL = new_model
     os.environ["OLLAMA_MODEL"] = new_model
@@ -240,7 +240,7 @@ def switch_model(new_model: str):
     metadata = load_metadata()
     all_texts = []
 
-    # Extract all stored text files and reprocess them
+    # Extract all stored text files
     for uid, data in metadata.items():
         text_path = os.path.join(UPLOAD_DIR, data["stored_filename"])
         if os.path.exists(text_path):
@@ -249,6 +249,10 @@ def switch_model(new_model: str):
                 if text:
                     all_texts.append(text)
 
+    # **Clear FAISS before reprocessing** to avoid mixed dimensions
+    shutil.rmtree(FAISS_INDEX_PATH, ignore_errors=True)
+    os.makedirs(FAISS_INDEX_PATH, exist_ok=True)
+
     # Reprocess FAISS with the new model
     if all_texts:
         embeddings = OllamaEmbeddings(model=OLLAMA_MODEL, base_url=OLLAMA_BASE_URL)
@@ -256,6 +260,11 @@ def switch_model(new_model: str):
         vector_store.save_local(FAISS_INDEX_PATH)
 
     save_model_label()
-    return {"message": f"Model switched to {new_model}. FAISS reprocessed with the new model."}
+    return {"message": f"Model switched to {new_model}. FAISS fully reprocessed with the new model."}
+
+@app.get("/current_model/")
+def get_current_model():
+    """Returns the current model being used for FAISS and queries."""
+    return {"current_model": OLLAMA_MODEL}
 
 
