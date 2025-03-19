@@ -1,4 +1,5 @@
 import os
+import re
 import shutil
 import random
 import string
@@ -13,6 +14,7 @@ from process import chunk_text
 from query import query_ai
 from langchain_community.vectorstores import FAISS
 from langchain_ollama import OllamaEmbeddings
+from datetime import datetime
 
 # Constants
 UPLOAD_DIR = "data"
@@ -138,13 +140,18 @@ async def export_all_files():
 
 @app.get("/export_faiss/")
 async def export_faiss():
-    """Exports FAISS index as a backup file including the model name."""
+    """Exports FAISS index as a backup file with a timestamp."""
     try:
         save_model_label()
+        timestamp = datetime.now().strftime("%Y%m%d%H%M")
         model_name = OLLAMA_MODEL.replace("/", "_")
-        backup_path = FAISS_BACKUP_TEMPLATE.format(model_name)
+        backup_filename = f"faiss_backup_{model_name}_{timestamp}.zip"
+        backup_path = os.path.join(EXPORT_DIR, backup_filename)
+
         shutil.make_archive(backup_path.replace(".zip", ""), 'zip', FAISS_INDEX_PATH)
-        return FileResponse(backup_path, media_type="application/zip", filename=f"faiss_backup_{model_name}.zip")
+
+        return FileResponse(backup_path, media_type="application/zip", filename=backup_filename)
+    
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error exporting FAISS index: {str(e)}")
 
@@ -152,17 +159,27 @@ async def export_faiss():
 async def import_faiss(file: UploadFile = File(...)):
     """Restores FAISS index from a backup file and ensures model consistency."""
     try:
+        # Save uploaded file
         backup_path = os.path.join(EXPORT_DIR, file.filename)
         with open(backup_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
+        # Extract model name from filename (faiss_backup_MODEL_YYYYMMDDHHMM.zip)
+        match = re.search(r"faiss_backup_(.*?)_\d{12}\.zip", file.filename)
+        if not match:
+            raise HTTPException(status_code=400, detail="Invalid FAISS backup filename format.")
+        
+        imported_model = match.group(1)
+        
+        # Unpack FAISS backup
         shutil.unpack_archive(backup_path, FAISS_INDEX_PATH, "zip")
 
-        imported_model = load_model_label()
-        if imported_model and imported_model != OLLAMA_MODEL:
+        # Check if model matches the active one, if not, switch
+        if imported_model != OLLAMA_MODEL:
             switch_model(imported_model)
 
-        return {"message": "FAISS index successfully restored."}
+        return {"message": f"FAISS index for {imported_model} successfully restored."}
+    
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error importing FAISS index: {str(e)}")
 
