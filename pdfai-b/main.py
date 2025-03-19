@@ -4,6 +4,7 @@ import random
 import string
 import zipfile
 import json
+import datetime
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import FileResponse
 from extract import extract_text
@@ -16,8 +17,10 @@ from langchain_ollama import OllamaEmbeddings
 # Constants
 UPLOAD_DIR = "data"
 FAISS_INDEX_PATH = "/app/faiss_index"
-FAISS_BACKUP = "/app/faiss_backup.zip"
+EXPORT_DIR = "/app/export"
+FAISS_BACKUP_TEMPLATE = "/app/export/faiss_backup_{}.zip"
 MODEL_TRACK_FILE = "/app/faiss_model.txt"
+METADATA_FILE = os.path.join(UPLOAD_DIR, "files_metadata.json")
 
 # Environment variables
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "mistral")
@@ -25,6 +28,19 @@ OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://ollama:11434")
 
 app = FastAPI()
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+os.makedirs(EXPORT_DIR, exist_ok=True)
+
+def save_metadata(metadata):
+    """Writes metadata to a JSON file."""
+    with open(METADATA_FILE, "w") as f:
+        json.dump(metadata, f, indent=4)
+
+def load_metadata():
+    """Loads metadata from a JSON file."""
+    if not os.path.exists(METADATA_FILE):
+        return {}
+    with open(METADATA_FILE, "r") as f:
+        return json.load(f)
 
 def generate_uid():
     """Generates a unique 12-character alphanumeric UID."""
@@ -50,6 +66,7 @@ def about():
 @app.post("/upload/")
 async def upload_file(files: list[UploadFile] = File(...)):
     """Uploads files, extracts text if necessary, and stores embeddings in FAISS."""
+    metadata = load_metadata()
     uploaded_files = []
     save_model_label()
 
@@ -73,6 +90,14 @@ async def upload_file(files: list[UploadFile] = File(...)):
                 store_in_faiss(chunks)
                 os.remove(file_path)
 
+                metadata[uid] = {
+                    "uid": uid,
+                    "original_filename": file.filename,
+                    "stored_filename": text_filename,
+                    "size_kb": round(len(extracted_text) / 1024, 2),
+                    "last_modified": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "model_used": OLLAMA_MODEL
+                }
                 uploaded_files.append({"file": file.filename, "message": "Text stored in FAISS."})
             else:
                 uploaded_files.append({"file": file.filename, "message": "No text extracted."})
@@ -80,12 +105,14 @@ async def upload_file(files: list[UploadFile] = File(...)):
         except Exception as e:
             uploaded_files.append({"file": file.filename, "message": f"Error: {str(e)}"})
 
+    save_metadata(metadata)
     return {"message": "Upload complete", "results": uploaded_files}
 
 @app.get("/list_files/")
 def list_files():
-    """Lists all uploaded files."""
-    return {"files": os.listdir(UPLOAD_DIR)}
+    """Lists all uploaded files with metadata including the model used."""
+    metadata = load_metadata()
+    return {"files": metadata}
 
 @app.get("/download/{filename}/")
 async def download_file(filename: str):
@@ -98,28 +125,31 @@ async def download_file(filename: str):
 @app.get("/export_all/")
 async def export_all_files():
     """Compresses all uploaded files into a ZIP and returns it."""
-    zip_path = "/app/export/data_export.zip"
-    shutil.make_archive("/app/export/data_export", 'zip', UPLOAD_DIR)
+    zip_path = os.path.join(EXPORT_DIR, "data_export.zip")
+    shutil.make_archive(os.path.join(EXPORT_DIR, "data_export"), 'zip', UPLOAD_DIR)
     return FileResponse(zip_path, media_type="application/zip", filename="data_export.zip")
 
 @app.get("/export_faiss/")
 async def export_faiss():
-    """Exports FAISS index as a backup file."""
+    """Exports FAISS index as a backup file including the model name."""
     try:
         save_model_label()
-        shutil.make_archive("/app/faiss_backup", 'zip', FAISS_INDEX_PATH)
-        return FileResponse(FAISS_BACKUP, media_type="application/zip", filename="faiss_backup.zip")
+        model_name = OLLAMA_MODEL.replace("/", "_")
+        backup_path = FAISS_BACKUP_TEMPLATE.format(model_name)
+        shutil.make_archive(backup_path.replace(".zip", ""), 'zip', FAISS_INDEX_PATH)
+        return FileResponse(backup_path, media_type="application/zip", filename=f"faiss_backup_{model_name}.zip")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error exporting FAISS index: {str(e)}")
 
 @app.post("/import_faiss/")
 async def import_faiss(file: UploadFile = File(...)):
-    """Restores FAISS index from a backup file."""
+    """Restores FAISS index from a backup file and ensures model consistency."""
     try:
-        with open(FAISS_BACKUP, "wb") as buffer:
+        backup_path = os.path.join(EXPORT_DIR, file.filename)
+        with open(backup_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        shutil.unpack_archive(FAISS_BACKUP, FAISS_INDEX_PATH, "zip")
+        shutil.unpack_archive(backup_path, FAISS_INDEX_PATH, "zip")
 
         imported_model = load_model_label()
         if imported_model and imported_model != OLLAMA_MODEL:
@@ -129,14 +159,30 @@ async def import_faiss(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error importing FAISS index: {str(e)}")
 
+@app.get("/query/")
+def query_extracted_text(question: str):
+    """Queries the extracted text using AI."""
+    try:
+        response = query_ai(question)
+        return {"question": question, "answer": response}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing query: {str(e)}")
+
 @app.delete("/delete/{filename}/")
 def delete_file(filename: str):
     """Deletes a specific uploaded file."""
+    metadata = load_metadata()
     file_path = os.path.join(UPLOAD_DIR, filename)
+
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="File not found.")
 
     os.remove(file_path)
+    for uid, data in list(metadata.items()):
+        if data["stored_filename"] == filename:
+            del metadata[uid]
+
+    save_metadata(metadata)
     return {"message": f"File {filename} deleted successfully."}
 
 @app.post("/switch_model/")
