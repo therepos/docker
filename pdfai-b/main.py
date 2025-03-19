@@ -101,9 +101,7 @@ async def upload_file(files: list[UploadFile] = File(...)):
                 else:
                     print(f"DEBUG: No chunks created for {file.filename}")
 
-        except Exception as e:
-            print(f"ERROR processing {file.filename}: {e}")
-
+                # Metadata update should be inside try block, NOT except!
                 metadata[uid] = {
                     "uid": uid,
                     "original_filename": file.filename,
@@ -202,7 +200,11 @@ def delete_all_files():
         os.makedirs(new_faiss_path, exist_ok=True)
 
         embeddings = OllamaEmbeddings(model=OLLAMA_MODEL, base_url="http://ollama:11434")
-        FAISS.from_texts([], embeddings).save_local(new_faiss_path)
+
+        # FIX: Add a small placeholder text to FAISS to prevent errors
+        placeholder_text = ["FAISS_INIT"]
+        faiss_index = FAISS.from_texts(placeholder_text, embeddings)
+        faiss_index.save_local(new_faiss_path)
 
         # Step 4: Switch to the Empty FAISS Index
         old_faiss_path = os.getenv("FAISS_INDEX_PATH", f"{FAISS_BASE_PATH}/faiss_index_{OLLAMA_MODEL}")
