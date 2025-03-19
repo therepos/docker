@@ -70,10 +70,6 @@ def about():
 @app.post("/upload/")
 async def upload_file(files: list[UploadFile] = File(...)):
     """Uploads files, extracts text, and stores embeddings in FAISS."""
-    
-    # **Ensure upload directory exists**
-    os.makedirs(UPLOAD_DIR, exist_ok=True)
-
     metadata = load_metadata()
     uploaded_files = []
 
@@ -113,7 +109,7 @@ async def upload_file(files: list[UploadFile] = File(...)):
             uploaded_files.append({"file": file.filename, "message": f"Error: {str(e)}"})
 
     save_metadata(metadata)
-    return {"message": "Upload complete", "results": uploaded_files"}
+    return {"message": "Upload complete", "results": uploaded_files}
 
 @app.get("/list_files/")
 def list_files():
