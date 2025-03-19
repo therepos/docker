@@ -168,77 +168,59 @@ async def import_faiss(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error importing FAISS index: {str(e)}")
 
-@app.delete("/delete/{uid}/")
-def delete_file(uid: str):
-    """Deletes a specific uploaded file by UID."""
-    metadata = load_metadata()
-
-    if uid not in metadata:
-        raise HTTPException(status_code=404, detail="File not found.")
-
-    file_path = os.path.join(UPLOAD_DIR, metadata[uid]["stored_filename"])
-
-    # Remove file if it exists
-    if os.path.exists(file_path):
-        os.remove(file_path)
-
-    # Remove entry from metadata
-    del metadata[uid]
-    save_metadata(metadata)
-
-    return {"message": f"File with UID {uid} deleted successfully."}
+from langchain_community.vectorstores import FAISS
+from langchain_ollama import OllamaEmbeddings
 
 @app.delete("/delete/all/")
 def delete_all_files():
-    """Deletes all uploaded files, clears metadata, and removes FAISS indexes."""
+    """Deletes all uploaded files, clears metadata, and resets FAISS."""
     try:
-        metadata = load_metadata()
-        files_deleted = 0
+        # **STEP 1: Delete All Data Files**
+        if os.path.exists(UPLOAD_DIR):
+            try:
+                shutil.rmtree(UPLOAD_DIR)  # Remove all files
+                os.makedirs(UPLOAD_DIR, exist_ok=True)  # Recreate the directory
+                print("DEBUG: Upload directory cleared.")
+            except Exception as e:
+                print(f"ERROR: Failed to clear upload directory: {str(e)}")
 
-        # **Delete each file (handling missing files gracefully)**
-        for uid in list(metadata.keys()):
-            file_path = os.path.join(UPLOAD_DIR, metadata[uid]["stored_filename"])
-            if os.path.exists(file_path):
-                try:
-                    os.remove(file_path)
-                    files_deleted += 1
-                    print(f"DEBUG: Deleted file {file_path}")
-                except Exception as e:
-                    print(f"ERROR: Failed to delete {file_path}: {str(e)}")
-            else:
-                print(f"WARNING: File {file_path} already missing. Removing from metadata.")
+        # **STEP 2: Clear Metadata**
+        if os.path.exists(METADATA_FILE):
+            os.remove(METADATA_FILE)  # Remove metadata file
+            print("DEBUG: Metadata file deleted.")
 
-            # **Remove metadata entry**
-            del metadata[uid]
+        # **STEP 3: Reset FAISS (Create a Fresh FAISS Index)**
+        global OLLAMA_MODEL
+        new_faiss_path = f"{FAISS_BASE_PATH}/faiss_index_{OLLAMA_MODEL}_new"
 
-        # **Save cleaned metadata**
-        save_metadata(metadata)
+        try:
+            # **Initialize a new FAISS index and point to it**
+            embeddings = OllamaEmbeddings(model=OLLAMA_MODEL, base_url="http://ollama:11434")
+            new_faiss_index = FAISS.from_texts(["FAISS RESET"], embeddings)  # Dummy text
+            new_faiss_index.save_local(new_faiss_path)  # Save empty FAISS
 
-        # **Ensure upload directory is fully cleared**
-        shutil.rmtree(UPLOAD_DIR, ignore_errors=True)
-        os.makedirs(UPLOAD_DIR, exist_ok=True)
-        print("DEBUG: Upload directory reset successfully.")
+            # **Update FAISS path**
+            old_faiss_path = os.getenv("FAISS_INDEX_PATH", f"{FAISS_BASE_PATH}/faiss_index_{OLLAMA_MODEL}")
+            os.environ["FAISS_INDEX_PATH"] = new_faiss_path
 
-        # **Remove all FAISS indexes dynamically**
-        faiss_indexes_deleted = 0
-        for folder in os.listdir(FAISS_BASE_PATH):
-            if folder.startswith("faiss_index_"):
-                faiss_path = os.path.join(FAISS_BASE_PATH, folder)
-                try:
-                    shutil.rmtree(faiss_path)
-                    faiss_indexes_deleted += 1
-                    print(f"DEBUG: Deleted FAISS index {faiss_path}")
-                except Exception as e:
-                    print(f"ERROR: Failed to delete FAISS index {faiss_path}: {str(e)}")
+            # **Delete the old FAISS index (now unlocked)**
+            if os.path.exists(old_faiss_path):
+                shutil.rmtree(old_faiss_path, ignore_errors=True)
+                print(f"DEBUG: Deleted old FAISS index at {old_faiss_path}")
+
+            # **Rename the new FAISS index to match the original path**
+            os.rename(new_faiss_path, old_faiss_path)
+            print(f"DEBUG: FAISS successfully reset at {old_faiss_path}")
+
+        except Exception as e:
+            print(f"ERROR: Failed to reset FAISS: {str(e)}")
 
         return {
-            "message": "All files, metadata, and FAISS indexes have been deleted.",
-            "files_deleted": files_deleted,
-            "faiss_indexes_deleted": faiss_indexes_deleted
+            "message": "All files, metadata, and FAISS index have been reset.",
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error deleting files and indexes: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error deleting everything: {str(e)}")
 
 @app.get("/query/")
 def query_extracted_text(question: str):
