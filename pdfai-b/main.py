@@ -70,11 +70,19 @@ def about():
 @app.post("/upload/")
 async def upload_file(files: list[UploadFile] = File(...)):
     """Uploads files, extracts text, and stores embeddings in FAISS."""
+    if not os.path.exists(UPLOAD_DIR):
+        os.makedirs(UPLOAD_DIR, exist_ok=True)
+        print("DEBUG: Upload directory recreated.")
+
     metadata = load_metadata()
     uploaded_files = []
 
     for file in files:
-        uid = generate_uid()
+        if not isinstance(file, UploadFile):
+            print(f"ERROR: Invalid file format received: {type(file)}")
+            raise HTTPException(status_code=400, detail="Invalid file format. Expected an uploaded file.")
+
+        uid = ''.join(random.choices(string.ascii_letters + string.digits, k=12))
         text_filename = f"{uid}.txt"
         text_path = os.path.join(UPLOAD_DIR, text_filename)
 
@@ -173,44 +181,39 @@ from langchain_ollama import OllamaEmbeddings
 
 @app.delete("/delete/all/")
 def delete_all_files():
-    """Forcefully deletes all uploaded files, clears metadata, and resets FAISS cache."""
+    """Deletes all uploaded files, clears metadata, and resets FAISS."""
     try:
-        # **STEP 1: Delete All Data Files**
+        global OLLAMA_MODEL, FAISS_INDEX
+
+        # **Step 1: Delete All Data Files**
         if os.path.exists(UPLOAD_DIR):
             shutil.rmtree(UPLOAD_DIR, ignore_errors=True)
             os.makedirs(UPLOAD_DIR, exist_ok=True)
             print("DEBUG: Upload directory cleared.")
 
-        # **STEP 2: Clear Metadata**
+        # **Step 2: Delete Metadata**
         if os.path.exists(METADATA_FILE):
             os.remove(METADATA_FILE)
             print("DEBUG: Metadata file deleted.")
 
-        # **STEP 3: Delete FAISS and Create a New One**
-        global OLLAMA_MODEL, FAISS_INDEX
-        new_faiss_path = f"{FAISS_BASE_PATH}/faiss_index_{OLLAMA_MODEL}_new"
+        # **Step 3: Delete FAISS Index Properly**
+        old_faiss_path = os.getenv("FAISS_INDEX_PATH", f"{FAISS_BASE_PATH}/faiss_index_{OLLAMA_MODEL}")
+        if os.path.exists(old_faiss_path):
+            shutil.rmtree(old_faiss_path, ignore_errors=True)
+            print(f"DEBUG: Deleted FAISS index at {old_faiss_path}")
+
+        # **Step 4: Create a Fresh FAISS Index**
+        new_faiss_path = f"{FAISS_BASE_PATH}/faiss_index_{OLLAMA_MODEL}"
+        os.environ["FAISS_INDEX_PATH"] = new_faiss_path
 
         try:
+            os.makedirs(new_faiss_path, exist_ok=True)
             embeddings = OllamaEmbeddings(model=OLLAMA_MODEL, base_url="http://ollama:11434")
+            FAISS.from_texts([], embeddings).save_local(new_faiss_path)  # Truly empty FAISS
+            print("DEBUG: FAISS index reset successfully.")
 
-            # **Create an empty FAISS index**
-            new_faiss_index = FAISS.from_texts([], embeddings)
-            new_faiss_index.save_local(new_faiss_path)
-
-            # **Delete the old FAISS index**
-            old_faiss_path = os.getenv("FAISS_INDEX_PATH", f"{FAISS_BASE_PATH}/faiss_index_{OLLAMA_MODEL}")
-            os.environ["FAISS_INDEX_PATH"] = new_faiss_path
-
-            if os.path.exists(old_faiss_path):
-                shutil.rmtree(old_faiss_path, ignore_errors=True)
-                print(f"DEBUG: Deleted old FAISS index at {old_faiss_path}")
-
-            # **Rename new FAISS index to match the original path**
-            os.rename(new_faiss_path, old_faiss_path)
-            print(f"DEBUG: FAISS successfully reset at {old_faiss_path}")
-
-            # **Force FAISS to Reload**
-            FAISS_INDEX = FAISS.load_local(old_faiss_path, embeddings)
+            # **Force FAISS Memory Refresh**
+            FAISS_INDEX = FAISS.load_local(new_faiss_path, embeddings)
             print("DEBUG: FAISS memory cleared and reloaded.")
 
         except Exception as e:
