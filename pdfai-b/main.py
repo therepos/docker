@@ -190,25 +190,39 @@ def delete_file(uid: str):
 
 @app.delete("/delete/all/")
 def delete_all_files():
-    """Deletes all uploaded files and FAISS indexes, ensuring cleanup always runs."""
+    """Deletes all uploaded files, clears metadata, and removes FAISS indexes."""
     try:
-        # Remove all uploaded files
+        metadata = load_metadata()
+
+        # **Delete each file using existing delete_file() function**
+        files_deleted = 0
+        for uid in list(metadata.keys()):  # Use list() to avoid RuntimeError when modifying dict
+            try:
+                delete_file(uid)  # Reuse the existing delete function
+                files_deleted += 1
+            except HTTPException as e:
+                print(f"WARNING: Failed to delete file with UID {uid}: {e.detail}")
+
+        # **Ensure upload directory is clean**
         shutil.rmtree(UPLOAD_DIR, ignore_errors=True)
         os.makedirs(UPLOAD_DIR, exist_ok=True)
+        print("DEBUG: Upload directory reset successfully.")
 
-        # Remove all FAISS indexes dynamically
+        # **Remove all FAISS indexes dynamically**
         faiss_indexes_deleted = 0
         for folder in os.listdir(FAISS_BASE_PATH):
             if folder.startswith("faiss_index_"):
-                shutil.rmtree(os.path.join(FAISS_BASE_PATH, folder), ignore_errors=True)
-                faiss_indexes_deleted += 1
-
-        # Clear metadata (if it exists)
-        if os.path.exists(METADATA_FILE):
-            os.remove(METADATA_FILE)
+                faiss_path = os.path.join(FAISS_BASE_PATH, folder)
+                try:
+                    shutil.rmtree(faiss_path)
+                    faiss_indexes_deleted += 1
+                    print(f"DEBUG: Deleted FAISS index {faiss_path}")
+                except Exception as e:
+                    print(f"ERROR: Failed to delete FAISS index {faiss_path}: {str(e)}")
 
         return {
-            "message": "All files and FAISS indexes have been deleted.",
+            "message": "All files, metadata, and FAISS indexes have been deleted.",
+            "files_deleted": files_deleted,
             "faiss_indexes_deleted": faiss_indexes_deleted
         }
 
