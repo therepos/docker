@@ -7,21 +7,27 @@ from langchain_ollama import OllamaLLM, OllamaEmbeddings
 # Ensure FAISS uses the correct model-based path
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "mistral")
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://ollama:11434")
-FAISS_INDEX_PATH = os.getenv("FAISS_INDEX_PATH", f"/app/faiss_index_{OLLAMA_MODEL}")  # Use model-specific FAISS path
+
+def get_faiss_path():
+    """Fetches the latest FAISS path dynamically."""
+    model = os.getenv("OLLAMA_MODEL", "mistral")
+    return os.getenv("FAISS_INDEX_PATH", f"/app/faiss_index_{model}")
 
 def query_ai(query):
     """Retrieves relevant text from FAISS and generates a response using Ollama."""
     try:
         print(f"DEBUG: Query received: {query}")
-        print(f"DEBUG: Using model '{OLLAMA_MODEL}' with base URL '{OLLAMA_BASE_URL}'")
+
+        # Ensure we always use the latest FAISS index
+        faiss_index_path = get_faiss_path()
+        print(f"DEBUG: Attempting to load FAISS index from {faiss_index_path}...")
 
         # Load embeddings
-        embeddings = OllamaEmbeddings(model=OLLAMA_MODEL, base_url=OLLAMA_BASE_URL)
+        embeddings = OllamaEmbeddings(model=os.getenv("OLLAMA_MODEL", "mistral"), base_url=os.getenv("OLLAMA_BASE_URL"))
         print("DEBUG: Embeddings initialized successfully.")
 
-        # Load FAISS index (Fixed: Now uses correct FAISS_INDEX_PATH)
-        print(f"DEBUG: Attempting to load FAISS index from {FAISS_INDEX_PATH}...")
-        vector_store = FAISS.load_local(FAISS_INDEX_PATH, embeddings, allow_dangerous_deserialization=True)
+        # Load FAISS index dynamically
+        vector_store = FAISS.load_local(faiss_index_path, embeddings, allow_dangerous_deserialization=True)
         print("DEBUG: FAISS index loaded successfully.")
 
         # Retrieve relevant documents
@@ -29,7 +35,7 @@ def query_ai(query):
         print("DEBUG: FAISS retriever initialized.")
 
         # Initialize Ollama LLM
-        llm = OllamaLLM(model=OLLAMA_MODEL, base_url=OLLAMA_BASE_URL)
+        llm = OllamaLLM(model=os.getenv("OLLAMA_MODEL", "mistral"), base_url=os.getenv("OLLAMA_BASE_URL"))
         print("DEBUG: Ollama LLM initialized successfully.")
 
         # Create query chain
