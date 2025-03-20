@@ -14,8 +14,8 @@ def store_in_faiss(chunks):
     # Check if FAISS index already exists
     if os.path.exists(FAISS_INDEX_PATH):
         try:
-            # Load existing FAISS index
-            vector_store = FAISS.load_local(FAISS_INDEX_PATH, embeddings)
+            # Load existing FAISS index safely
+            vector_store = FAISS.load_local(FAISS_INDEX_PATH, embeddings, allow_dangerous_deserialization=True)
             print("DEBUG: Existing FAISS index loaded.")
             
             # Add new documents to existing index
