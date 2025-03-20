@@ -18,30 +18,36 @@ from indexer import switch_model
 from langchain_community.vectorstores import FAISS
 from langchain_ollama import OllamaEmbeddings
 
-# Constants
+# **Constants**
 UPLOAD_DIR = "data"
 EXPORT_DIR = "/app/export"
 FAISS_BASE_PATH = "/app"
 MODEL_TRACK_FILE = "/app/active_model.txt"
 METADATA_FILE = os.path.join(UPLOAD_DIR, "files_metadata.json")
 
-# **Load Last Used Model on Startup**
+# **Load Last Used Model on Startup or Set Default**
 if os.path.exists(MODEL_TRACK_FILE):
     with open(MODEL_TRACK_FILE, "r") as f:
         OLLAMA_MODEL = f.read().strip()
 else:
-    OLLAMA_MODEL = "mistral"  # Default model
+    OLLAMA_MODEL = "mistral"  # Default model if no previous model is found
 
-# Set FAISS path based on active model
+# **Ensure OLLAMA_BASE_URL is Set Properly**
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://ollama:11434")
+
+# **Set FAISS index path based on active model**
+FAISS_INDEX_PATH = f"{FAISS_BASE_PATH}/faiss_index_{OLLAMA_MODEL}"
+
+# **Ensure environment variables are properly set**
 os.environ["OLLAMA_BASE_URL"] = OLLAMA_BASE_URL
-os.environ["OLLAMA_MODEL"] = OLLAMA_MODEL  # Ensure the model is globally accessible
-os.environ["FAISS_INDEX_PATH"] = f"{FAISS_BASE_PATH}/faiss_index_{OLLAMA_MODEL}"
+os.environ["OLLAMA_MODEL"] = OLLAMA_MODEL
+os.environ["FAISS_INDEX_PATH"] = FAISS_INDEX_PATH
 
 print(f"DEBUG: Loaded OLLAMA_BASE_URL: {OLLAMA_BASE_URL}")
 print(f"DEBUG: Loaded OLLAMA_MODEL: {OLLAMA_MODEL}")
 print(f"DEBUG: FAISS Index Path: {FAISS_INDEX_PATH}")
 
+# **Initialize FastAPI App**
 app = FastAPI()
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(EXPORT_DIR, exist_ok=True)
