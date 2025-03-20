@@ -207,19 +207,6 @@ def delete_all_files():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error resetting FAISS: {str(e)}")
 
-from fastapi import FastAPI, HTTPException
-import os
-import traceback
-from langchain_community.vectorstores import FAISS
-from langchain_ollama import OllamaEmbeddings
-from query import query_ai  # Ensure this matches your project structure
-
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "mistral")
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://ollama:11434")
-FAISS_INDEX_PATH = "/app/faiss_index"
-
-app = FastAPI()
-
 @app.get("/query/")
 def query_extracted_text(question: str, uid: str = None):
     """Queries the extracted text using AI, optionally filtering by file using its uid."""
