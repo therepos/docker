@@ -5,15 +5,18 @@ from langchain_community.vectorstores import FAISS
 # Fetch model and base URL from environment variables
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "mistral")
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://ollama:11434")
-FAISS_INDEX_PATH = "/app/faiss_index"
+FAISS_INDEX_PATH = os.getenv("FAISS_INDEX_PATH", f"/app/faiss_index_{OLLAMA_MODEL}")
 
 def initialize_faiss():
     """Creates an empty FAISS index if none exists."""
     embeddings = OllamaEmbeddings(model=OLLAMA_MODEL, base_url=OLLAMA_BASE_URL)
 
-    if not os.path.exists(FAISS_INDEX_PATH) or not os.path.exists(f"{FAISS_INDEX_PATH}/index.faiss"):
+    # Ensure the FAISS directory exists
+    os.makedirs(FAISS_INDEX_PATH, exist_ok=True)
+
+    # Check if FAISS index is missing and needs to be created
+    if not os.path.exists(f"{FAISS_INDEX_PATH}/index.faiss"):
         print("DEBUG: FAISS index missing. Creating an empty FAISS index.")
-        os.makedirs(FAISS_INDEX_PATH, exist_ok=True)
         empty_vector_store = FAISS.from_texts(["FAISS_INIT"], embeddings, metadatas=[{"source": "init"}])
         empty_vector_store.save_local(FAISS_INDEX_PATH)
         print("DEBUG: Empty FAISS index created.")
@@ -31,7 +34,7 @@ def store_in_faiss(chunks, uid):
 
         # Associate each chunk with its uid
         metadata_entries = [{"source": uid} for _ in chunks]
-        
+
         # Add new documents to existing index
         vector_store.add_texts(chunks, metadatas=metadata_entries)
         print(f"DEBUG: Appended {len(chunks)} new chunks from {uid} to FAISS index.")
