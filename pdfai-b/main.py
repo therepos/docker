@@ -12,11 +12,13 @@ from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import FileResponse
 from extract import extract_text
 from store import store_in_faiss
+from store import initialize_faiss
 from process import chunk_text
 from query import query_ai
 from indexer import switch_model
 from langchain_community.vectorstores import FAISS
 from langchain_ollama import OllamaEmbeddings
+
 
 # **Constants**
 UPLOAD_DIR = "data"
@@ -46,6 +48,9 @@ os.environ["FAISS_INDEX_PATH"] = FAISS_INDEX_PATH
 print(f"DEBUG: Loaded OLLAMA_BASE_URL: {OLLAMA_BASE_URL}")
 print(f"DEBUG: Loaded OLLAMA_MODEL: {OLLAMA_MODEL}")
 print(f"DEBUG: FAISS Index Path: {FAISS_INDEX_PATH}")
+
+# Ensure FAISS index is initialized on startup
+initialize_faiss()
 
 # **Initialize FastAPI App**
 app = FastAPI()
