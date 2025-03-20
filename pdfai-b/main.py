@@ -272,15 +272,17 @@ def get_active_faiss_model():
 
 @app.post("/switch_model/")
 def switch_model_endpoint(new_model: str):
-    """Switch to a new model and update the global FAISS path."""
     result = switch_model(new_model)
 
-    # Ensure main.py knows the new model
-    global OLLAMA_MODEL
-    OLLAMA_MODEL = new_model
-    os.environ["OLLAMA_MODEL"] = new_model
-    os.environ["FAISS_INDEX_PATH"] = f"{FAISS_BASE_PATH}/faiss_index_{new_model}"
+    # Re-sync main.py globals with environment
+    global OLLAMA_MODEL, FAISS_INDEX_PATH
+    OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", new_model)
+    FAISS_INDEX_PATH = os.getenv("FAISS_INDEX_PATH", f"{FAISS_BASE_PATH}/faiss_index_{OLLAMA_MODEL}")
+
+    print(f"DEBUG: Switched model in main.py: {OLLAMA_MODEL}")
+    print(f"DEBUG: Updated FAISS path in main.py: {FAISS_INDEX_PATH}")
 
     return result
+
 
 
