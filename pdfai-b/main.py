@@ -69,7 +69,7 @@ def about():
 
 @app.post("/upload/")
 async def upload_file(files: list[UploadFile] = File(...)):
-    """Uploads files, extracts text, and stores embeddings in FAISS."""
+    """Uploads files, extracts text, and stores embeddings in FAISS with metadata tracking."""
     metadata = load_metadata()
     uploaded_files = []
 
@@ -96,12 +96,12 @@ async def upload_file(files: list[UploadFile] = File(...)):
 
                 chunks = chunk_text(extracted_text)
                 if chunks:
-                    store_in_faiss(chunks)  # Store directly in FAISS
+                    store_in_faiss(chunks, uid)  # Associate chunks with file ID
                     os.remove(file_path)  # Cleanup after processing
                 else:
                     print(f"DEBUG: No chunks created for {file.filename}")
 
-                # Metadata update should be inside try block, NOT except!
+                # Store file metadata
                 metadata[uid] = {
                     "uid": uid,
                     "original_filename": file.filename,
@@ -207,25 +207,55 @@ def delete_all_files():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error resetting FAISS: {str(e)}")
 
+from fastapi import FastAPI, HTTPException
+import os
+import traceback
+from langchain_community.vectorstores import FAISS
+from langchain_ollama import OllamaEmbeddings
+from query import query_ai  # Ensure this matches your project structure
+
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "mistral")
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://ollama:11434")
+FAISS_INDEX_PATH = "/app/faiss_index"
+
+app = FastAPI()
+
 @app.get("/query/")
-def query_extracted_text(question: str):
-    """Queries the extracted text using FAISS, with a friendly message if no data is available."""
+def query_extracted_text(question: str, uid: str = None):
+    """Queries the extracted text using AI, optionally filtering by file using its uid."""
     try:
-        faiss_path = os.getenv("FAISS_INDEX_PATH", f"{FAISS_BASE_PATH}/faiss_index_{OLLAMA_MODEL}")
+        print(f"DEBUG: Query received: {question}")
+        print(f"DEBUG: Using model '{OLLAMA_MODEL}' with base URL '{OLLAMA_BASE_URL}'")
 
-        # **Only check metadata, do NOT change FAISS handling**
-        if not os.path.exists(METADATA_FILE) or os.stat(METADATA_FILE).st_size == 0:
-            return {
-                "question": question,
-                "answer": "No documents available to process. Please upload files first."
-            }
+        # Load embeddings
+        embeddings = OllamaEmbeddings(model=OLLAMA_MODEL, base_url=OLLAMA_BASE_URL)
+        print("DEBUG: Embeddings initialized successfully.")
 
-        # **Run the query as it worked before**
+        # Load FAISS index
+        print(f"DEBUG: Attempting to load FAISS index from {FAISS_INDEX_PATH}...")
+        vector_store = FAISS.load_local(FAISS_INDEX_PATH, embeddings, allow_dangerous_deserialization=True)
+        print("DEBUG: FAISS index loaded successfully.")
+
+        # Retrieve relevant documents
+        retriever = vector_store.as_retriever()
+        print("DEBUG: FAISS retriever initialized.")
+
+        # If `uid` is provided, filter results to that specific document
+        if uid:
+            print(f"DEBUG: Filtering results for document UID: {uid}")
+            retriever.search_kwargs = {"filter": {"source": uid}}
+
+        # Execute query via `query_ai()`
         response = query_ai(question)
-        return {"question": question, "answer": response}
+
+        print(f"DEBUG: Response generated: {response}")
+        return {"question": question, "file": uid if uid else "all", "answer": response}
 
     except Exception as e:
-        return {"question": question, "answer": f"Error processing query: {str(e)}"}
+        error_details = traceback.format_exc()
+        print(f"ERROR: Query failed - {str(e)}")
+        print(f"ERROR DETAILS:\n{error_details}")
+        raise HTTPException(status_code=500, detail=f"Error processing query: {str(e)}")
 
 @app.get("/current_model/")
 def get_current_model():
