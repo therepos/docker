@@ -195,7 +195,7 @@ async def import_faiss(file: UploadFile = File(...)):
 
 @app.delete("/delete/all/")
 def delete_all_files():
-    """Deletes all files, clears FAISS index while keeping the folder."""
+    """Deletes all files, clears FAISS index, and resets everything in memory."""
     try:
         global OLLAMA_MODEL
 
@@ -208,15 +208,15 @@ def delete_all_files():
         if os.path.exists(METADATA_FILE):
             os.remove(METADATA_FILE)
 
-        # Step 3: Delete FAISS Index Contents (But Keep the Folder)
-        faiss_path = "/mnt/sec/apps/pdfai/faiss_index"
+        # Step 3: Delete FAISS Index Completely
+        faiss_path = f"/app/faiss_index_{OLLAMA_MODEL}"  # Ensure model-specific FAISS path is used
         if os.path.exists(faiss_path):
-            for file in os.listdir(faiss_path):
-                file_path = os.path.join(faiss_path, file)
-                if os.path.isfile(file_path) or os.path.islink(file_path):
-                    os.unlink(file_path)
-                elif os.path.isdir(file_path):
-                    shutil.rmtree(file_path)
+            shutil.rmtree(faiss_path, ignore_errors=True)  # Remove entire FAISS directory
+            os.makedirs(faiss_path, exist_ok=True)  # Recreate empty FAISS directory
+
+        # Step 4: Force FAISS to reset in memory
+        from store import initialize_faiss
+        initialize_faiss()  # Reinitialize FAISS with a fresh empty index
 
         return {"message": "All files, metadata, and FAISS index have been reset."}
 
