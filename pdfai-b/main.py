@@ -33,9 +33,14 @@ else:
     OLLAMA_MODEL = "mistral"  # Default model
 
 # Set FAISS path based on active model
-os.environ["OLLAMA_MODEL"] = OLLAMA_MODEL
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://ollama:11434")
+os.environ["OLLAMA_BASE_URL"] = OLLAMA_BASE_URL
+os.environ["OLLAMA_MODEL"] = OLLAMA_MODEL  # Ensure the model is globally accessible
 os.environ["FAISS_INDEX_PATH"] = f"{FAISS_BASE_PATH}/faiss_index_{OLLAMA_MODEL}"
-print(f"DEBUG: Loaded last used model: {OLLAMA_MODEL}")
+
+print(f"DEBUG: Loaded OLLAMA_BASE_URL: {OLLAMA_BASE_URL}")
+print(f"DEBUG: Loaded OLLAMA_MODEL: {OLLAMA_MODEL}")
+print(f"DEBUG: FAISS Index Path: {FAISS_INDEX_PATH}")
 
 app = FastAPI()
 os.makedirs(UPLOAD_DIR, exist_ok=True)

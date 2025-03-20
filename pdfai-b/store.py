@@ -18,7 +18,7 @@ def initialize_faiss():
         empty_vector_store.save_local(FAISS_INDEX_PATH)
         print("DEBUG: Empty FAISS index created.")
 
-def store_in_faiss(chunks, uid):  # <-- Change `file_id` to `uid`
+def store_in_faiss(chunks, uid):
     """Stores extracted text chunks in FAISS while preserving existing data, associating chunks with uid."""
     initialize_faiss()  # Ensure FAISS is initialized before trying to load
 
@@ -44,4 +44,3 @@ def store_in_faiss(chunks, uid):  # <-- Change `file_id` to `uid`
     # Save the updated FAISS index
     vector_store.save_local(FAISS_INDEX_PATH)
     print("DEBUG: FAISS index saved successfully.")
-
