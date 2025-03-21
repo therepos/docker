@@ -82,59 +82,6 @@ def about():
     """Returns API status."""
     return {"message": "PDF-AI API is running", "version": "1.0", "model": OLLAMA_MODEL}
 
-@app.post("/upload/")
-async def upload_file(files: list[UploadFile] = File(...)):
-    """Uploads files, extracts text, and stores embeddings in FAISS with metadata tracking."""
-    metadata = load_metadata()
-    uploaded_files = []
-
-    for file in files:
-        uid = generate_uid()
-        text_filename = f"{uid}.txt"
-        text_path = os.path.join(UPLOAD_DIR, text_filename)
-
-        try:
-            file_path = os.path.join(UPLOAD_DIR, file.filename)
-            with open(file_path, "wb") as buffer:
-                shutil.copyfileobj(file.file, buffer)
-
-            # Read content only once
-            if file.filename.endswith(".txt"):
-                with open(file_path, "r", encoding="utf-8") as f:
-                    extracted_text = f.read()
-            else:
-                extracted_text = extract_text(file_path)
-
-            if extracted_text.strip():
-                with open(text_path, "w", encoding="utf-8") as text_file:
-                    text_file.write(extracted_text)
-
-                chunks = chunk_text(extracted_text)
-                if chunks:
-                    store_in_faiss(chunks, uid)  # Associate chunks with file ID
-                    os.remove(file_path)  # Cleanup after processing
-                else:
-                    print(f"DEBUG: No chunks created for {file.filename}")
-
-                # Store file metadata
-                metadata[uid] = {
-                    "uid": uid,
-                    "original_filename": file.filename,
-                    "stored_filename": text_filename,
-                    "size_kb": round(len(extracted_text) / 1024, 2),
-                    "last_modified": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "model_used": OLLAMA_MODEL
-                }
-                uploaded_files.append({"file": file.filename, "message": "Text stored in FAISS."})
-            else:
-                uploaded_files.append({"file": file.filename, "message": "No text extracted."})
-
-        except Exception as e:
-            uploaded_files.append({"file": file.filename, "message": f"Error: {str(e)}"})
-
-    save_metadata(metadata)
-    return {"message": "Upload complete", "results": uploaded_files}
-
 @app.get("/list_files/")
 def list_files():
     """Lists all uploaded files with metadata including the model used."""
@@ -288,18 +235,5 @@ def get_active_faiss_model():
     """Returns the FAISS index in use."""
     return {"active_faiss_index": os.getenv("FAISS_INDEX_PATH")}
 
-@app.post("/switch_model/")
-def switch_model_endpoint(new_model: str):
-    global OLLAMA_MODEL, FAISS_INDEX_PATH
 
-    result = switch_model(new_model)
-
-    # Update globals from env
-    OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", new_model)
-    FAISS_INDEX_PATH = os.getenv("FAISS_INDEX_PATH", f"{FAISS_BASE_PATH}/faiss_index_{OLLAMA_MODEL}")
-
-    print(f"DEBUG: Switched model in main.py: {OLLAMA_MODEL}")
-    print(f"DEBUG: Updated FAISS path in main.py: {FAISS_INDEX_PATH}")
-
-    return result
 
