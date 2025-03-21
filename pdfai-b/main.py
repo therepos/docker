@@ -241,14 +241,18 @@ def query_extracted_text(question: str, uid: str = None):
         retriever = vector_store.as_retriever()
         print("DEBUG: FAISS retriever initialized.")
 
-        # If `uid` is provided, filter results to that specific document
         if uid:
             print(f"DEBUG: Filtering results for document UID: {uid}")
             retriever.search_kwargs = {"filter": {"source": uid}}
 
+        # Check if index only contains placeholder chunk
+        docs = retriever.get_relevant_documents(question)
+        if all("FAISS_INIT" in doc.page_content for doc in docs):
+            print("DEBUG: FAISS contains only placeholder chunk.")
+            return {"question": question, "file": uid if uid else "all", "answer": "No file found."}
+
         # Execute query via `query_ai()`
         response = query_ai(question)
-
         print(f"DEBUG: Response generated: {response}")
         return {"question": question, "file": uid if uid else "all", "answer": response}
 
@@ -256,8 +260,7 @@ def query_extracted_text(question: str, uid: str = None):
         error_message = str(e)
         if "could not open" in error_message and "index.faiss" in error_message:
             return {"question": question, "file": uid if uid else "all", "answer": "No file found."}
-        
-        # For other unexpected errors, keep full trace
+
         error_details = traceback.format_exc()
         print(f"ERROR: Query failed - {error_message}")
         print(f"ERROR DETAILS:\n{error_details}")
