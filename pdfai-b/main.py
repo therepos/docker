@@ -177,6 +177,8 @@ async def import_faiss(file: UploadFile = File(...)):
             raise HTTPException(status_code=400, detail="Invalid FAISS backup filename format.")
 
         imported_model = match.group(1)
+        
+        global OLLAMA_MODEL, FAISS_INDEX_PATH
 
         # Compare with current model
         if imported_model != OLLAMA_MODEL:
@@ -184,7 +186,6 @@ async def import_faiss(file: UploadFile = File(...)):
             switch_model(imported_model)
 
             # Update main.py's globals
-            global OLLAMA_MODEL, FAISS_INDEX_PATH
             OLLAMA_MODEL = imported_model
             FAISS_INDEX_PATH = f"{FAISS_BASE_PATH}/faiss_index_{OLLAMA_MODEL}"
             os.environ["OLLAMA_MODEL"] = OLLAMA_MODEL
