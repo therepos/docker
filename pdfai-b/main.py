@@ -152,7 +152,6 @@ async def export_all_files():
 async def export_faiss():
     """Exports FAISS index as a backup file with a timestamp."""
     try:
-        save_model_label()
         timestamp = datetime.now().strftime("%Y%m%d%H%M")
         model_name = OLLAMA_MODEL.replace("/", "_")
         backup_filename = f"faiss_backup_{model_name}_{timestamp}.zip"
@@ -161,7 +160,7 @@ async def export_faiss():
         shutil.make_archive(backup_path.replace(".zip", ""), 'zip', FAISS_INDEX_PATH)
 
         return FileResponse(backup_path, media_type="application/zip", filename=backup_filename)
-    
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error exporting FAISS index: {str(e)}")
 
@@ -169,18 +168,17 @@ async def export_faiss():
 async def import_faiss(file: UploadFile = File(...)):
     """Restores FAISS index from a backup file and ensures model consistency."""
     try:
-        # Save uploaded file
         backup_path = os.path.join(EXPORT_DIR, file.filename)
         with open(backup_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        # Extract model name from filename (faiss_backup_MODEL_YYYYMMDDHHMM.zip)
+        # Extract model name from filename
         match = re.search(r"faiss_backup_(.*?)_\d{12}\.zip", file.filename)
         if not match:
             raise HTTPException(status_code=400, detail="Invalid FAISS backup filename format.")
-        
+
         imported_model = match.group(1)
-        
+
         # Unpack FAISS backup
         shutil.unpack_archive(backup_path, FAISS_INDEX_PATH, "zip")
 
@@ -189,7 +187,7 @@ async def import_faiss(file: UploadFile = File(...)):
             switch_model(imported_model)
 
         return {"message": f"FAISS index for {imported_model} successfully restored."}
-    
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error importing FAISS index: {str(e)}")
 
