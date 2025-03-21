@@ -18,6 +18,7 @@ from query import query_ai
 from indexer import switch_model
 from langchain_community.vectorstores import FAISS
 from langchain_ollama import OllamaEmbeddings
+from typing import List
 
 # **Constants**
 UPLOAD_DIR = "data"
@@ -309,29 +310,9 @@ def switch_model_endpoint(new_model: str):
 @app.post(
     "/upload_test/",
     summary="Upload multiple files",
-    description="Uploads one or more files, extracts text, and stores embeddings in FAISS.",
-    openapi_extra={
-        "requestBody": {
-            "content": {
-                "multipart/form-data": {
-                    "schema": {
-                        "type": "object",
-                        "properties": {
-                            "files": {
-                                "type": "array",
-                                "items": {
-                                    "type": "string",
-                                    "format": "binary"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
+    description="Uploads one or more files, extracts text, and stores embeddings in FAISS."
 )
-async def upload_file_test(files: list[UploadFile] = File(...)):
+async def upload_file_test(files: List[UploadFile] = File(...)):
     """Uploads files, extracts text, and stores embeddings in FAISS with metadata tracking."""
     metadata = load_metadata()
     uploaded_files = []
