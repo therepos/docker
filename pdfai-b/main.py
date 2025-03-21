@@ -8,7 +8,7 @@ import json
 import traceback
 import time
 from datetime import datetime
-from fastapi import FastAPI, UploadFile, File, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.responses import FileResponse
 from extract import extract_text
 from store import store_in_faiss
@@ -366,10 +366,11 @@ def get_active_faiss_model():
 
 @app.post("/switch_model/")
 def switch_model_endpoint(new_model: str):
+    global OLLAMA_MODEL, FAISS_INDEX_PATH
+
     result = switch_model(new_model)
 
-    # Re-sync main.py globals with environment
-    global OLLAMA_MODEL, FAISS_INDEX_PATH
+    # Update globals from env
     OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", new_model)
     FAISS_INDEX_PATH = os.getenv("FAISS_INDEX_PATH", f"{FAISS_BASE_PATH}/faiss_index_{OLLAMA_MODEL}")
 
