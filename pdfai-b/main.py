@@ -253,10 +253,15 @@ def query_extracted_text(question: str, uid: str = None):
         return {"question": question, "file": uid if uid else "all", "answer": response}
 
     except Exception as e:
+        error_message = str(e)
+        if "could not open" in error_message and "index.faiss" in error_message:
+            return {"question": question, "file": uid if uid else "all", "answer": "No file found."}
+        
+        # For other unexpected errors, keep full trace
         error_details = traceback.format_exc()
-        print(f"ERROR: Query failed - {str(e)}")
+        print(f"ERROR: Query failed - {error_message}")
         print(f"ERROR DETAILS:\n{error_details}")
-        raise HTTPException(status_code=500, detail=f"Error processing query: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error processing query: {error_message}")
 
 @app.get("/current_model/")
 def get_current_model():
