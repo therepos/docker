@@ -8,7 +8,7 @@ import json
 import traceback
 import time
 from datetime import datetime
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, UploadFile, File, Form
 from fastapi.responses import FileResponse
 from extract import extract_text
 from store import store_in_faiss
@@ -18,7 +18,6 @@ from query import query_ai
 from indexer import switch_model
 from langchain_community.vectorstores import FAISS
 from langchain_ollama import OllamaEmbeddings
-
 
 # **Constants**
 UPLOAD_DIR = "data"
@@ -135,9 +134,6 @@ async def upload_file(files: list[UploadFile] = File(...)):
 
     save_metadata(metadata)
     return {"message": "Upload complete", "results": uploaded_files}
-
-from fastapi import UploadFile, File
-from fastapi import Form  # Optional if you ever need extra fields
 
 @app.post(
     "/upload_test/",
