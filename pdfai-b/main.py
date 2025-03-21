@@ -172,21 +172,34 @@ async def import_faiss(file: UploadFile = File(...)):
         with open(backup_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        # Extract model name from filename
+        # Extract model name from filename: faiss_backup_MODEL_YYYYMMDDHHMM.zip
         match = re.search(r"faiss_backup_(.*?)_\d{12}\.zip", file.filename)
         if not match:
             raise HTTPException(status_code=400, detail="Invalid FAISS backup filename format.")
 
         imported_model = match.group(1)
 
-        # Unpack FAISS backup
-        shutil.unpack_archive(backup_path, FAISS_INDEX_PATH, "zip")
-
-        # Check if model matches the active one, if not, switch
+        # Compare with current model
         if imported_model != OLLAMA_MODEL:
+            print(f"DEBUG: Switching from model {OLLAMA_MODEL} to {imported_model} to match imported FAISS...")
             switch_model(imported_model)
 
-        return {"message": f"FAISS index for {imported_model} successfully restored."}
+            # Update main.py's globals
+            global OLLAMA_MODEL, FAISS_INDEX_PATH
+            OLLAMA_MODEL = imported_model
+            FAISS_INDEX_PATH = f"{FAISS_BASE_PATH}/faiss_index_{OLLAMA_MODEL}"
+            os.environ["OLLAMA_MODEL"] = OLLAMA_MODEL
+            os.environ["FAISS_INDEX_PATH"] = FAISS_INDEX_PATH
+
+        # Clear current FAISS index folder
+        if os.path.exists(FAISS_INDEX_PATH):
+            shutil.rmtree(FAISS_INDEX_PATH, ignore_errors=True)
+            os.makedirs(FAISS_INDEX_PATH, exist_ok=True)
+
+        # Unzip FAISS index
+        shutil.unpack_archive(backup_path, FAISS_INDEX_PATH, "zip")
+
+        return {"message": f"FAISS index for model '{imported_model}' successfully restored and activated."}
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error importing FAISS index: {str(e)}")
