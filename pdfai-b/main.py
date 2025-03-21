@@ -135,81 +135,81 @@ async def upload_file(files: list[UploadFile] = File(...)):
     save_metadata(metadata)
     return {"message": "Upload complete", "results": uploaded_files}
 
-@app.post(
-    "/upload_test/",
-    summary="Upload multiple files",
-    description="Uploads one or more files, extracts text, and stores embeddings in FAISS.",
-    openapi_extra={
-        "requestBody": {
-            "content": {
-                "multipart/form-data": {
-                    "schema": {
-                        "type": "object",
-                        "properties": {
-                            "files": {
-                                "type": "array",
-                                "items": {
-                                    "type": "string",
-                                    "format": "binary"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-)
-async def upload_file_test(files: list[UploadFile] = File(...)):
-    """Uploads files, extracts text, and stores embeddings in FAISS with metadata tracking."""
-    metadata = load_metadata()
-    uploaded_files = []
+# @app.post(
+#     "/upload_test/",
+#     summary="Upload multiple files",
+#     description="Uploads one or more files, extracts text, and stores embeddings in FAISS.",
+#     openapi_extra={
+#         "requestBody": {
+#             "content": {
+#                 "multipart/form-data": {
+#                     "schema": {
+#                         "type": "object",
+#                         "properties": {
+#                             "files": {
+#                                 "type": "array",
+#                                 "items": {
+#                                     "type": "string",
+#                                     "format": "binary"
+#                                 }
+#                             }
+#                         }
+#                     }
+#                 }
+#             }
+#         }
+#     }
+# )
+# async def upload_file_test(files: list[UploadFile] = File(...)):
+#     """Uploads files, extracts text, and stores embeddings in FAISS with metadata tracking."""
+#     metadata = load_metadata()
+#     uploaded_files = []
 
-    for file in files:
-        uid = generate_uid()
-        text_filename = f"{uid}.txt"
-        text_path = os.path.join(UPLOAD_DIR, text_filename)
+#     for file in files:
+#         uid = generate_uid()
+#         text_filename = f"{uid}.txt"
+#         text_path = os.path.join(UPLOAD_DIR, text_filename)
 
-        try:
-            file_path = os.path.join(UPLOAD_DIR, file.filename)
-            with open(file_path, "wb") as buffer:
-                shutil.copyfileobj(file.file, buffer)
+#         try:
+#             file_path = os.path.join(UPLOAD_DIR, file.filename)
+#             with open(file_path, "wb") as buffer:
+#                 shutil.copyfileobj(file.file, buffer)
 
-            # Read content only once
-            if file.filename.endswith(".txt"):
-                with open(file_path, "r", encoding="utf-8") as f:
-                    extracted_text = f.read()
-            else:
-                extracted_text = extract_text(file_path)
+#             # Read content only once
+#             if file.filename.endswith(".txt"):
+#                 with open(file_path, "r", encoding="utf-8") as f:
+#                     extracted_text = f.read()
+#             else:
+#                 extracted_text = extract_text(file_path)
 
-            if extracted_text.strip():
-                with open(text_path, "w", encoding="utf-8") as text_file:
-                    text_file.write(extracted_text)
+#             if extracted_text.strip():
+#                 with open(text_path, "w", encoding="utf-8") as text_file:
+#                     text_file.write(extracted_text)
 
-                chunks = chunk_text(extracted_text)
-                if chunks:
-                    store_in_faiss(chunks, uid)
-                    os.remove(file_path)
-                else:
-                    print(f"DEBUG: No chunks created for {file.filename}")
+#                 chunks = chunk_text(extracted_text)
+#                 if chunks:
+#                     store_in_faiss(chunks, uid)
+#                     os.remove(file_path)
+#                 else:
+#                     print(f"DEBUG: No chunks created for {file.filename}")
 
-                metadata[uid] = {
-                    "uid": uid,
-                    "original_filename": file.filename,
-                    "stored_filename": text_filename,
-                    "size_kb": round(len(extracted_text) / 1024, 2),
-                    "last_modified": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "model_used": OLLAMA_MODEL
-                }
-                uploaded_files.append({"file": file.filename, "message": "Text stored in FAISS."})
-            else:
-                uploaded_files.append({"file": file.filename, "message": "No text extracted."})
+#                 metadata[uid] = {
+#                     "uid": uid,
+#                     "original_filename": file.filename,
+#                     "stored_filename": text_filename,
+#                     "size_kb": round(len(extracted_text) / 1024, 2),
+#                     "last_modified": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+#                     "model_used": OLLAMA_MODEL
+#                 }
+#                 uploaded_files.append({"file": file.filename, "message": "Text stored in FAISS."})
+#             else:
+#                 uploaded_files.append({"file": file.filename, "message": "No text extracted."})
 
-        except Exception as e:
-            uploaded_files.append({"file": file.filename, "message": f"Error: {str(e)}"})
+#         except Exception as e:
+#             uploaded_files.append({"file": file.filename, "message": f"Error: {str(e)}"})
 
-    save_metadata(metadata)
-    return {"message": "Upload complete", "results": uploaded_files}
+#     save_metadata(metadata)
+#     return {"message": "Upload complete", "results": uploaded_files}
 
 @app.get("/list_files/")
 def list_files():
@@ -366,11 +366,10 @@ def get_active_faiss_model():
 
 @app.post("/switch_model/")
 def switch_model_endpoint(new_model: str):
-    global OLLAMA_MODEL, FAISS_INDEX_PATH  # Declare first
-
     result = switch_model(new_model)
 
-    # Update globals from env
+    # Re-sync main.py globals with environment
+    global OLLAMA_MODEL, FAISS_INDEX_PATH
     OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", new_model)
     FAISS_INDEX_PATH = os.getenv("FAISS_INDEX_PATH", f"{FAISS_BASE_PATH}/faiss_index_{OLLAMA_MODEL}")
 
@@ -378,4 +377,3 @@ def switch_model_endpoint(new_model: str):
     print(f"DEBUG: Updated FAISS path in main.py: {FAISS_INDEX_PATH}")
 
     return result
-
