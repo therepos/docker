@@ -2,26 +2,25 @@
 fastapi>=0.78.0
 uvicorn[gunicorn]
 
-# LangChain and AI tools
+# LangChain and utilities
 langchain
 langchain-community
 langchain-ollama
 
-# PDF and text extraction
+# PDF and image handling
 pymupdf
 pypdf
 pdf2image
 pillow
-ebooklib
-mobi
-html2text
+
+# OCR tools (DO NOT add `tesseract-ocr` here, it must be installed via apt)
 pytesseract
 
-# Vector search
+# Vector search and FAISS
 faiss-cpu
 chromadb
 
-# File handling
+# Tokenization and file handling
 tiktoken
 python-multipart
 
