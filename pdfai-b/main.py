@@ -8,7 +8,7 @@ import json
 import traceback
 import time
 from datetime import datetime
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.responses import FileResponse
 from extract import extract_text
 from store import store_in_faiss
@@ -304,3 +304,80 @@ def switch_model_endpoint(new_model: str):
 
     return result
 
+# Test starts here
+
+@app.post(
+    "/upload_test/",
+    summary="Upload multiple files",
+    description="Uploads one or more files, extracts text, and stores embeddings in FAISS.",
+    openapi_extra={
+        "requestBody": {
+            "content": {
+                "multipart/form-data": {
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "files": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string",
+                                    "format": "binary"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+)
+async def upload_file_test(files: list[UploadFile] = File(...)):
+    """Uploads files, extracts text, and stores embeddings in FAISS with metadata tracking."""
+    metadata = load_metadata()
+    uploaded_files = []
+
+    for file in files:
+        uid = generate_uid()
+        text_filename = f"{uid}.txt"
+        text_path = os.path.join(UPLOAD_DIR, text_filename)
+
+        try:
+            file_path = os.path.join(UPLOAD_DIR, file.filename)
+            with open(file_path, "wb") as buffer:
+                shutil.copyfileobj(file.file, buffer)
+
+            # Read content only once
+            if file.filename.endswith(".txt"):
+                with open(file_path, "r", encoding="utf-8") as f:
+                    extracted_text = f.read()
+            else:
+                extracted_text = extract_text(file_path)
+
+            if extracted_text.strip():
+                with open(text_path, "w", encoding="utf-8") as text_file:
+                    text_file.write(extracted_text)
+
+                chunks = chunk_text(extracted_text)
+                if chunks:
+                    store_in_faiss(chunks, uid)
+                    os.remove(file_path)
+                else:
+                    print(f"DEBUG: No chunks created for {file.filename}")
+
+                metadata[uid] = {
+                    "uid": uid,
+                    "original_filename": file.filename,
+                    "stored_filename": text_filename,
+                    "size_kb": round(len(extracted_text) / 1024, 2),
+                    "last_modified": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "model_used": OLLAMA_MODEL
+                }
+                uploaded_files.append({"file": file.filename, "message": "Text stored in FAISS."})
+            else:
+                uploaded_files.append({"file": file.filename, "message": "No text extracted."})
+
+        except Exception as e:
+            uploaded_files.append({"file": file.filename, "message": f"Error: {str(e)}"})
+
+    save_metadata(metadata)
+    return {"message": "Upload complete", "results": uploaded_files}
