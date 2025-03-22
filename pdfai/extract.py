@@ -6,6 +6,7 @@ import pytesseract
 from pdf2image import convert_from_path
 from PIL import Image
 from ebooklib import epub
+from ebooklib.epub import EpubHtml
 
 def extract_text_from_epub(epub_path):
     """Extract text from an EPUB file."""
@@ -13,7 +14,7 @@ def extract_text_from_epub(epub_path):
         book = epub.read_epub(epub_path)
         text = ""
         for item in book.get_items():
-            if item.get_type() == 9:
+            if isinstance(item, EpubHtml):
                 text += item.get_body().decode("utf-8")
         return text.strip() if text else "Error: No readable text in EPUB."
     except Exception as e:
