@@ -10,5 +10,6 @@ services:
       - /mnt/sec/apps/pdfai/data:/app/data
       - /mnt/sec/apps/pdfai/export:/app/export
       - /mnt/sec/apps/pdfai/faiss_index:/app/faiss_index
+      - /mnt/sec/apps/pdfai/src:/app/src  # <-- live-editable code
     ports:
       - "3024:8000"
