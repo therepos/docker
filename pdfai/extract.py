@@ -13,7 +13,7 @@ def extract_text_from_epub(epub_path):
         book = epub.read_epub(epub_path)
         text = ""
         for item in book.get_items():
-            if item.get_type() == epub.ITEM_DOCUMENT:
+            if item.get_type() == 9:
                 text += item.get_body().decode("utf-8")
         return text.strip() if text else "Error: No readable text in EPUB."
     except Exception as e:
