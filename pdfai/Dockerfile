@@ -8,6 +8,7 @@ RUN apt-get update && apt-get install -y \
     tesseract-ocr \
     libtesseract-dev \
     poppler-utils \
+    calibre \
     curl \
     nano \
     && rm -rf /var/lib/apt/lists/*

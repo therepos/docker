@@ -7,18 +7,17 @@ from pdf2image import convert_from_path
 from PIL import Image
 from ebooklib import epub
 from ebooklib.epub import EpubHtml
+import subprocess
 
 def extract_text_from_epub(epub_path):
-    """Extract text from an EPUB file."""
+    """Extract text from an EPUB file using Calibre's ebook-convert."""
     try:
-        book = epub.read_epub(epub_path)
-        text = ""
-        for item in book.get_items():
-            if isinstance(item, EpubHtml):
-                text += item.get_body().decode("utf-8")
-        return text.strip() if text else "Error: No readable text in EPUB."
+        output_path = epub_path + ".txt"
+        subprocess.run(["ebook-convert", epub_path, output_path], check=True)
+        with open(output_path, "r", encoding="utf-8") as f:
+            return f.read().strip()
     except Exception as e:
-        return f"Error extracting EPUB text: {str(e)}"
+        return f"Error extracting EPUB via Calibre: {str(e)}"
 
 def extract_text_from_mobi(mobi_path):
     """Convert MOBI to text using the best available method."""
