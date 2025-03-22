@@ -10,12 +10,12 @@ import time
 from datetime import datetime
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import FileResponse
-from extract import extract_text
-from store import store_in_faiss
-from store import initialize_faiss
-from process import chunk_text
-from query import query_ai
-from indexer import switch_model
+from src.extract import extract_text
+from src.store import store_in_faiss
+from src.store import initialize_faiss
+from src.process import chunk_text
+from src.query import query_ai
+from src.indexer import switch_model
 from langchain_community.vectorstores import FAISS
 from langchain_ollama import OllamaEmbeddings
 

@@ -2,8 +2,8 @@ import os
 import json
 import shutil
 import traceback
-from store import store_in_faiss, initialize_faiss
-from process import chunk_text
+from src.store import store_in_faiss, initialize_faiss
+from src.process import chunk_text
 from langchain_community.vectorstores import FAISS
 from langchain_ollama import OllamaEmbeddings
 
