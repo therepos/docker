@@ -14,11 +14,11 @@ from email.mime.multipart import MIMEMultipart
 from datetime import datetime
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.responses import FileResponse, JSONResponse
-from src.extract import extract_text
-from src.store import store_in_faiss, initialize_faiss
-from src.process import chunk_text
-from src.query import query_ai
-from src.indexer import switch_model
+from extract import extract_text
+from store import store_in_faiss, initialize_faiss
+from process import chunk_text
+from query import query_ai
+from indexer import switch_model
 from langchain_community.vectorstores import FAISS
 from langchain_ollama import OllamaEmbeddings
 
@@ -80,12 +80,12 @@ def generate_uid():
     return ''.join(random.choices(string.ascii_letters + string.digits, k=12))
 
 # **File Management Endpoints**
-@app.get("/")
+@get("/")
 def about():
     """Returns API status."""
     return {"message": "PDF-AI API is running", "version": "1.0", "model": OLLAMA_MODEL}
 
-@app.post("/upload/")
+@post("/upload/")
 async def upload_file(files: list[UploadFile] = File(...)):
     """Uploads files, extracts text, and stores embeddings in FAISS with metadata tracking."""
     metadata = load_metadata()
@@ -138,19 +138,19 @@ async def upload_file(files: list[UploadFile] = File(...)):
     save_metadata(metadata)
     return {"message": "Upload complete", "results": uploaded_files}
 
-@app.get("/list_files/")
+@get("/list_files/")
 def list_files():
     """Lists all uploaded files with metadata including the model used."""
     return {"files": load_metadata()}
 
-@app.get("/export_all/")
+@get("/export_all/")
 async def export_all_files():
     """Compresses all uploaded files into a ZIP and returns it."""
     zip_path = os.path.join(EXPORT_DIR, "data_export.zip")
     shutil.make_archive(os.path.join(EXPORT_DIR, "data_export"), 'zip', UPLOAD_DIR)
     return FileResponse(zip_path, media_type="application/zip", filename="data_export.zip")
 
-@app.get("/export_faiss/")
+@get("/export_faiss/")
 async def export_faiss():
     """Exports FAISS index as a backup file with a timestamp."""
     try:
@@ -166,7 +166,7 @@ async def export_faiss():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error exporting FAISS index: {str(e)}")
 
-@app.post("/import_faiss/")
+@post("/import_faiss/")
 async def import_faiss(file: UploadFile = File(...)):
     """Restores FAISS index from a backup file and ensures model consistency."""
     try:
@@ -207,7 +207,7 @@ async def import_faiss(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error importing FAISS index: {str(e)}")
 
-@app.delete("/delete/all/")
+@delete("/delete/all/")
 def delete_all_files():
     """Deletes all files, clears FAISS index, and resets everything in memory."""
     try:
@@ -236,7 +236,7 @@ def delete_all_files():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error resetting FAISS: {str(e)}")
 
-@app.get("/query/")
+@get("/query/")
 def query_extracted_text(question: str, uid: str = None):
     """Queries the extracted text using AI, optionally filtering by file using its uid."""
     try:
@@ -281,17 +281,17 @@ def query_extracted_text(question: str, uid: str = None):
         print(f"ERROR DETAILS:\n{error_details}")
         raise HTTPException(status_code=500, detail=f"Error processing query: {error_message}")
 
-@app.get("/current_model/")
+@get("/current_model/")
 def get_current_model():
     """Returns the current model being used for FAISS and queries."""
     return {"current_model": OLLAMA_MODEL}
 
-@app.get("/faiss_model/")
+@get("/faiss_model/")
 def get_active_faiss_model():
     """Returns the FAISS index in use."""
     return {"active_faiss_index": os.getenv("FAISS_INDEX_PATH")}
 
-@app.post("/switch_model/")
+@post("/switch_model/")
 def switch_model_endpoint(new_model: str):
     global OLLAMA_MODEL, FAISS_INDEX_PATH
 
@@ -389,7 +389,7 @@ def send_download_email(to_email: str, download_url: str):
     except Exception as e:
         print("[ERROR] Failed to send email:", str(e))
 
-@app.post("/extract_and_email/")
+@post("/extract_and_email/")
 async def extract_only(file: UploadFile = File(...), email: str = Form(...)):
     uid = generate_uid()
     raw_path = os.path.join(UPLOAD_DIR, file.filename)
@@ -426,14 +426,14 @@ def process_and_email(filename, file_bytes, email, uid):
     except Exception as e:
         print(f"[ERROR] background task failed: {e}")
         
-@app.get("/export/{uid}")
+@get("/export/{uid}")
 async def export_txt(uid: str):
     path = os.path.join(EXPORT_DIR, f"{uid}.txt")
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="File not found")
     return FileResponse(path, media_type="text/plain", filename=f"{uid}.txt")
 
-@app.post("/extract_and_download/")
+@post("/extract_and_download/")
 async def extract_only(file: UploadFile = File(...)):
     uid = generate_uid()
     raw_path = os.path.join(UPLOAD_DIR, file.filename)

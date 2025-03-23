@@ -3,7 +3,7 @@ name: Build and Push PDF-AI Image
 on:
   push:
     paths:
-      - 'pdfai/**'          # Trigger only when files in pdfai/ change
+      - 'pdfai/app/**'          # Trigger only when files in pdfai/ change
   workflow_dispatch:
 
 jobs:

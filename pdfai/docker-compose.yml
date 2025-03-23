@@ -13,6 +13,6 @@
     volumes:
       - /mnt/sec/apps/pdfai/data:/app/data
       - /mnt/sec/apps/pdfai/export:/app/export
-      - /mnt/sec/apps/pdfai/src:/app/src  # <-- live-editable code
+      - /mnt/sec/apps/pdfai/src:/app/src  # Uncomment for live-editable code
     ports:
       - "3024:8000"

@@ -1,0 +1,23 @@
+# Version control
+.git
+.gitignore
+
+# Local env and secrets
+.env
+*.env
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Dev/test files
+tests/
+*.md
+*.log
+
+# Editor and OS stuff
+.vscode/
+*.DS_Store
+*.swp
