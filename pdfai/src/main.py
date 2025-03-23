@@ -226,7 +226,6 @@ def delete_all_files():
             os.makedirs(faiss_path, exist_ok=True)  # Recreate empty FAISS directory
 
         # Step 4: Force FAISS to reset in memory
-        from store import initialize_faiss
         initialize_faiss()  # Reinitialize FAISS with a fresh empty index
 
         return {"message": "All files, metadata, and FAISS index have been reset."}
