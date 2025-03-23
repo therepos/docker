@@ -3,7 +3,7 @@ name: Build and Push PDF-AI Image
 on:
   push:
     paths:
-      - 'pdfai/app/**'          # Trigger only when files in pdfai/ change
+      - 'pdfai/**'          # Trigger only when files in pdfai/ change
   workflow_dispatch:
 
 jobs:
@@ -24,5 +24,5 @@ jobs:
 
       - name: Build and Push PDF-AI Docker Image
         run: |
-          docker build -t ghcr.io/therepos/pdfai:latest ./pdfai/app
+          docker build -t ghcr.io/therepos/pdfai:latest ./pdfai
           docker push ghcr.io/therepos/pdfai:latest
