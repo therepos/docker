@@ -7,8 +7,9 @@
       - OLLAMA_MODEL=mistral  # Default model
       - SMTP_HOST=smtp.sendgrid.net
       - SMTP_PORT=587
-      - SMTP_USER=noreply@threeminuteslab.com
+      - SMTP_USER=apikey
       - SMTP_PASS=${SMTP_PASS}
+      - SENDER_EMAIL=noreply@threeminuteslab.com
     volumes:
       - /mnt/sec/apps/pdfai/data:/app/data
       - /mnt/sec/apps/pdfai/export:/app/export

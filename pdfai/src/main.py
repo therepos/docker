@@ -15,8 +15,7 @@ from datetime import datetime
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.responses import FileResponse, JSONResponse
 from src.extract import extract_text
-from src.store import store_in_faiss
-from src.store import initialize_faiss
+from src.store import store_in_faiss, initialize_faiss
 from src.process import chunk_text
 from src.query import query_ai
 from src.indexer import switch_model
@@ -356,29 +355,39 @@ def clean_text(text: str) -> str:
 def send_download_email(to_email: str, download_url: str):
     smtp_host = os.environ.get("SMTP_HOST", "smtp.sendgrid.net")
     smtp_port = int(os.environ.get("SMTP_PORT", "587"))
-    sender_email = os.environ.get("SMTP_USER")  # e.g. noreply@threeminuteslab.com
-    sender_password = os.environ.get("SMTP_PASS")
+    sender_email = os.environ.get("SENDER_EMAIL")
+    sender_user = os.environ.get("SMTP_USER", "apikey")
+    sender_pass = os.environ.get("SMTP_PASS")
 
-    if not sender_email or not sender_password:
-        raise RuntimeError("Missing SMTP_USER or SMTP_PASS")
+    if not sender_email or not sender_pass:
+        print("[ERROR] Missing SENDER_EMAIL or SMTP_PASS")
+        return
 
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = "Your file is ready"
-    msg["From"] = f"PDF AI <{sender_email}>"
-    msg["To"] = to_email
+    print("===[ Email Send Triggered ]===")
+    print("To:", to_email)
+    print("From:", sender_email)
+    print("Download Link:", download_url)
 
-    html = f"""\
-    <html><body>
-    <p>Your file has been processed.<br>
-       <a href="{download_url}">Click here to download</a>
-    </p></body></html>
-    """
-    msg.attach(MIMEText(html, "html"))
+    try:
+        msg = MIMEText(
+            f"Your file is ready.\n\nClick to download:\n{download_url}",
+            "plain"
+        )
+        msg["Subject"] = "Your extracted file is ready"
+        msg["From"] = f"PDF AI <{sender_email}>"
+        msg["To"] = to_email
+        msg.add_header("X-SMTPAPI", '{"filters": {"clicktrack": {"settings": {"enable": 0}}}}')
 
-    with smtplib.SMTP(smtp_host, smtp_port) as server:
-        server.starttls()
-        server.login(sender_email, sender_password)
-        server.sendmail(sender_email, to_email, msg.as_string())
+        with smtplib.SMTP(smtp_host, smtp_port) as server:
+            server.set_debuglevel(1)
+            server.starttls()
+            server.login(sender_user, sender_pass)
+            server.sendmail(sender_email, to_email, msg.as_string())
+
+        print("[SUCCESS] Email sent to", to_email)
+
+    except Exception as e:
+        print("[ERROR] Failed to send email:", str(e))
 
 @app.post("/extract_and_email/")
 async def extract_only(file: UploadFile = File(...), email: str = Form(...)):
