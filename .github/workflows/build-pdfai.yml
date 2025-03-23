@@ -3,7 +3,7 @@ name: Build and Push PDF-AI Image
 on:
   push:
     paths:
-      - 'pdfai/**'          # Specify path to changes that trigger commit
+      - 'pdfai/**'          # Trigger only when files in pdfai/ change
   workflow_dispatch:
 
 jobs:
@@ -12,17 +12,21 @@ jobs:
     permissions:
       packages: write
 
+    env:
+      EMAIL_USER: ${{ secrets.EMAIL_USER }}
+      EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v3
         with:
           ref: main
-          fetch-depth: 0    # Ensures the latest commit is used
+          fetch-depth: 0  # Ensures latest commit is used
 
-      - name: Log in to GHCR
+      - name: Log in to GitHub Container Registry (GHCR)
         run: echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-      - name: Build and Push PDF-AI
+      - name: Build and Push PDF-AI Docker Image
         run: |
           docker build -t ghcr.io/therepos/pdfai:latest ./pdfai
           docker push ghcr.io/therepos/pdfai:latest
