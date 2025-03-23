@@ -7,6 +7,8 @@ import zipfile
 import json
 import traceback
 import time
+import threading
+import yagmail
 from datetime import datetime
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import FileResponse
@@ -302,3 +304,85 @@ def switch_model_endpoint(new_model: str):
     print(f"DEBUG: Updated FAISS path in main.py: {FAISS_INDEX_PATH}")
 
     return result
+
+def merge_broken_lines(text: str) -> str:
+    lines = text.split('\n')
+    merged = []
+
+    for i in range(len(lines)):
+        current = lines[i].rstrip()
+
+        if i < len(lines) - 1:
+            next_line = lines[i + 1].lstrip()
+
+            # If current line ends without .?! and next starts lowercase or punctuation, merge
+            if (
+                current and not re.search(r"[.?!]['\"]?$", current)
+                and re.match(r"^[a-z\"\'\(\[{.,;!?]", next_line)
+            ):
+                lines[i + 1] = current + " " + next_line
+                continue
+
+        merged.append(current)
+
+    return '\n'.join(merged)
+
+def clean_text(text: str) -> str:
+    text = re.sub(r"\r\n|\r", "\n", text)
+    text = re.sub(r"[ \t]+", " ", text)
+
+    lines = text.split("\n")
+    lines = [line.lstrip() for line in lines]
+    text = "\n".join(lines)
+
+    text = merge_broken_lines(text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+
+    # Space before major headers
+    patterns = [
+        r"(Chapter\s+\d+[:\s])",
+        r"(Love Lesson\s+\d+:)",
+        r"(Lesson\s+\d+:)",
+        r"(Section\s+\d+[:\s])",
+        r"(^\s*[A-Z][^\n]{0,60}\n[A-Z][^\n]{0,60}\n)",
+    ]
+    for p in patterns:
+        text = re.sub(rf"\n*{p}", r"\n\n\1", text)
+
+    return text.strip()
+
+@app.post("/extract_only/")
+async def extract_only(file: UploadFile = File(...)):
+    uid = generate_uid()
+    raw_path = os.path.join(UPLOAD_DIR, file.filename)
+    text_filename = f"{uid}.txt"
+    text_path = os.path.join(UPLOAD_DIR, text_filename)
+
+    try:
+        with open(raw_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
+        # Extract + clean
+        if file.filename.endswith(".txt"):
+            with open(raw_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            cleaned = clean_text(content)
+        else:
+            raw = extract_text(raw_path)
+            cleaned = clean_text(raw)
+
+        with open(text_path, "w", encoding="utf-8") as f:
+            f.write(cleaned)
+
+        return FileResponse(path=text_path, media_type="text/plain", filename=text_filename)
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Extraction failed: {str(e)}")
+        
+@app.get("/status/{uid}")
+def check_status(uid: str):
+    text_path = os.path.join(UPLOAD_DIR, f"{uid}.txt")
+    if os.path.exists(text_path):
+        return {"status": "done", "uid": uid}
+    return {"status": "processing", "uid": uid}
+
