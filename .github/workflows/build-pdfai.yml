@@ -24,5 +24,6 @@ jobs:
 
       - name: Build and Push PDF-AI Docker Image
         run: |
-          docker build -t ghcr.io/therepos/pdfai:latest ./pdfai/app
+          cd pdfai/app
+          docker build -t ghcr.io/therepos/pdfai:latest .
           docker push ghcr.io/therepos/pdfai:latest
