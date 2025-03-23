@@ -80,12 +80,12 @@ def generate_uid():
     return ''.join(random.choices(string.ascii_letters + string.digits, k=12))
 
 # **File Management Endpoints**
-@get("/")
+@app.get("/")
 def about():
     """Returns API status."""
     return {"message": "PDF-AI API is running", "version": "1.0", "model": OLLAMA_MODEL}
 
-@post("/upload/")
+@app.post("/upload/")
 async def upload_file(files: list[UploadFile] = File(...)):
     """Uploads files, extracts text, and stores embeddings in FAISS with metadata tracking."""
     metadata = load_metadata()

@@ -16,15 +16,12 @@ RUN apt-get update && apt-get install -y \
 # Install pip
 RUN curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py && python3 get-pip.py && rm get-pip.py
 
-# Copy the requirements file
+# Copy only requirements first (better Docker layer caching)
 COPY requirements.txt /app/
-
-# Install Python dependencies from requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application files
-# COPY ./src /app/src   # Uncomment for testing
-COPY . /app   # Uncomment for production
+# Copy the rest of the app
+COPY . /app
 
 # Expose the API port
 EXPOSE 8000
