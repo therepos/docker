@@ -8,10 +8,12 @@ import json
 import traceback
 import time
 import threading
-import yagmail
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from datetime import datetime
-from fastapi import FastAPI, UploadFile, File, HTTPException
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, UploadFile, File, HTTPException, Form
+from fastapi.responses import FileResponse, JSONResponse
 from src.extract import extract_text
 from src.store import store_in_faiss
 from src.store import initialize_faiss
@@ -351,7 +353,76 @@ def clean_text(text: str) -> str:
 
     return text.strip()
 
-@app.post("/extract_only/")
+def send_download_email(to_email: str, download_url: str):
+    sender_email = os.environ.get("EMAIL_USER")
+    sender_password = os.environ.get("EMAIL_PASS")
+
+    if not sender_email or not sender_password:
+        raise RuntimeError("Missing EMAIL_USER or EMAIL_PASS in environment variables")
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = "Your extracted file is ready"
+    msg["From"] = sender_email
+    msg["To"] = to_email
+
+    html = f"""\
+    <html><body>
+    <p>Your file is ready.<br>
+       <a href="{download_url}">Click here to download</a>
+    </p></body></html>
+    """
+    msg.attach(MIMEText(html, "html"))
+
+    with smtplib.SMTP("smtp.gmail.com", 587) as server:
+        server.starttls()
+        server.login(sender_email, sender_password)
+        server.sendmail(sender_email, to_email, msg.as_string())
+
+@app.post("/extract_and_email/")
+async def extract_only(file: UploadFile = File(...), email: str = Form(...)):
+    uid = generate_uid()
+    raw_path = os.path.join(UPLOAD_DIR, file.filename)
+    text_path = os.path.join(EXPORT_DIR, f"{uid}.txt")
+
+    file_bytes = await file.read()
+
+    # Trigger background task
+    threading.Thread(target=process_and_email, args=(file.filename, file_bytes, email, uid)).start()
+
+    return {"status": "processing", "uid": uid}
+
+def process_and_email(filename, file_bytes, email, uid):
+    try:
+        raw_path = os.path.join(UPLOAD_DIR, filename)
+        text_path = os.path.join(EXPORT_DIR, f"{uid}.txt")
+
+        with open(raw_path, "wb") as f:
+            f.write(file_bytes)
+
+        if filename.endswith(".txt"):
+            content = file_bytes.decode("utf-8")
+            cleaned = clean_text(content)
+        else:
+            raw = extract_text(raw_path)
+            cleaned = clean_text(raw)
+
+        with open(text_path, "w", encoding="utf-8") as f:
+            f.write(cleaned)
+
+        link = f"https://pdfai.threeminuteslab.com/export/{uid}"
+        send_download_email(email, link)
+
+    except Exception as e:
+        print(f"[ERROR] background task failed: {e}")
+        
+@app.get("/export/{uid}")
+async def export_txt(uid: str):
+    path = os.path.join(EXPORT_DIR, f"{uid}.txt")
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(path, media_type="text/plain", filename=f"{uid}.txt")
+
+@app.post("/extract_and_download/")
 async def extract_only(file: UploadFile = File(...)):
     uid = generate_uid()
     raw_path = os.path.join(UPLOAD_DIR, file.filename)
@@ -378,11 +449,3 @@ async def extract_only(file: UploadFile = File(...)):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Extraction failed: {str(e)}")
-        
-@app.get("/status/{uid}")
-def check_status(uid: str):
-    text_path = os.path.join(UPLOAD_DIR, f"{uid}.txt")
-    if os.path.exists(text_path):
-        return {"status": "done", "uid": uid}
-    return {"status": "processing", "uid": uid}
-
