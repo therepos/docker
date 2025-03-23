@@ -354,26 +354,28 @@ def clean_text(text: str) -> str:
     return text.strip()
 
 def send_download_email(to_email: str, download_url: str):
-    sender_email = os.environ.get("EMAIL_USER")
-    sender_password = os.environ.get("EMAIL_PASS")
+    smtp_host = os.environ.get("SMTP_HOST", "smtp.sendgrid.net")
+    smtp_port = int(os.environ.get("SMTP_PORT", "587"))
+    sender_email = os.environ.get("SMTP_USER")  # e.g. noreply@threeminuteslab.com
+    sender_password = os.environ.get("SMTP_PASS")
 
     if not sender_email or not sender_password:
-        raise RuntimeError("Missing EMAIL_USER or EMAIL_PASS in environment variables")
+        raise RuntimeError("Missing SMTP_USER or SMTP_PASS")
 
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = "Your extracted file is ready"
-    msg["From"] = sender_email
+    msg["Subject"] = "Your file is ready"
+    msg["From"] = f"PDF AI <{sender_email}>"
     msg["To"] = to_email
 
     html = f"""\
     <html><body>
-    <p>Your file is ready.<br>
+    <p>Your file has been processed.<br>
        <a href="{download_url}">Click here to download</a>
     </p></body></html>
     """
     msg.attach(MIMEText(html, "html"))
 
-    with smtplib.SMTP("smtp.gmail.com", 587) as server:
+    with smtplib.SMTP(smtp_host, smtp_port) as server:
         server.starttls()
         server.login(sender_email, sender_password)
         server.sendmail(sender_email, to_email, msg.as_string())

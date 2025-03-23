@@ -5,8 +5,10 @@
     environment:
       - OLLAMA_BASE_URL=http://ollama:11434
       - OLLAMA_MODEL=mistral  # Default model
-      - EMAIL_USER=${EMAIL_USER}
-      - EMAIL_PASS=${EMAIL_PASS}
+      - SMTP_HOST=smtp.sendgrid.net
+      - SMTP_PORT=587
+      - SMTP_USER=noreply@threeminuteslab.com
+      - SMTP_PASS=${SMTP_PASS}
     volumes:
       - /mnt/sec/apps/pdfai/data:/app/data
       - /mnt/sec/apps/pdfai/export:/app/export
